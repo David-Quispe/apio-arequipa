@@ -10,7 +10,9 @@ from app.core.db import engine
 
 BUFFER_METROS = 15
 
-_CASE_AVENIDA = """
+# Reutilizado por app/services/privilegios.py y por el generador del custom
+# model de GraphHopper (backend/scripts/generar_privilegios_graphhopper.py).
+CASE_AVENIDA = """
     CASE
         WHEN name ILIKE '%j_rcito%' THEN 'Av. Ejercito'
         WHEN name ILIKE '%puente grau%' THEN 'Puente Grau'
@@ -39,7 +41,7 @@ def avenidas_en_ruta(coordenadas_lonlat: list[list[float]]) -> dict[str, float]:
                 WITH ruta AS (
                     SELECT ST_Buffer(ST_GeomFromText(:wkt, 4326)::geography, :buffer)::geometry AS buf
                 )
-                SELECT {_CASE_AVENIDA} AS avenida,
+                SELECT {CASE_AVENIDA} AS avenida,
                        SUM(ST_Length(ST_Intersection(geometry, ruta.buf)::geography)) AS metros
                 FROM privilegios_via, ruta
                 WHERE ST_Intersects(geometry, ruta.buf)

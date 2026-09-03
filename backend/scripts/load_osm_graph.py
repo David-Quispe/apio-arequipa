@@ -12,9 +12,12 @@ import osmnx as ox
 from app.core.config import settings
 
 # Bounding box (left=west, bottom=south, right=east, top=north) en EPSG:4326.
-# Cubre Cerro Colorado / Cayma / Yanahuara (origen) hasta el cluster
-# hospitalario del Cercado (destino), incluyendo Puente Grau.
-CORRIDOR_BBOX = (-71.585, -16.415, -71.520, -16.360)
+# Cubre el Cono Norte real (Cerro Colorado incluyendo Peruarbo, Rio Seco y
+# Zamacola -- no solo Cayma/Yanahuara) hasta el cluster hospitalario del
+# Cercado (destino), incluyendo Puente Grau. Ampliado el 2026-09-03: el bbox
+# original dejaba fuera zonas de expansion real del Cono Norte (ver memoria
+# del proyecto), que es justamente la poblacion que motiva el proyecto.
+CORRIDOR_BBOX = (-71.63, -16.42, -71.52, -16.33)
 
 
 def _stringify_list_columns(gdf):

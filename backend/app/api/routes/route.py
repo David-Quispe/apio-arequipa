@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
 from app.services.corridor_overlap import avenidas_en_ruta
+from app.services.privilegios import scores_por_avenida
 from app.services.traffic import factor_ajuste_eta, obtener_trafico_corredor
 
 router = APIRouter()
@@ -19,13 +20,27 @@ async def get_route(origin_lat: float, origin_lon: float, dest_lat: float, dest_
         response = await client.get(f"{settings.graphhopper_url}/route", params=params)
 
     if response.status_code != 200:
+        try:
+            hints = response.json().get("hints", [])
+        except Exception:
+            hints = []
+        fuera_de_cobertura = {
+            "com.graphhopper.util.exceptions.PointNotFoundException",
+            "com.graphhopper.util.exceptions.PointOutOfBoundsException",
+        }
+        if any(h.get("details") in fuera_de_cobertura for h in hints):
+            raise HTTPException(
+                status_code=400,
+                detail="Ese punto está fuera del área piloto que cubre APIO (Cono Norte - cluster "
+                "hospitalario del Cercado). Probá con un punto más cerca del corredor.",
+            )
         raise HTTPException(status_code=502, detail="GraphHopper no pudo calcular la ruta")
 
     path = response.json()["paths"][0]
     time_s = path["time"] / 1000
 
     time_s_con_trafico = time_s
-    avenidas_cruzadas: list[str] = []
+    privilegios_cruzados: list[dict] = []
     try:
         metros_por_avenida = avenidas_en_ruta(path["points"]["coordinates"])
         if metros_por_avenida:
@@ -35,14 +50,23 @@ async def get_route(origin_lat: float, origin_lon: float, dest_lat: float, dest_
                 metros * trafico.get(avenida, 1.0) for avenida, metros in metros_por_avenida.items()
             ) / total_metros
             time_s_con_trafico = time_s * factor_ajuste_eta(ratio_ponderado)
-            avenidas_cruzadas = list(metros_por_avenida.keys())
+
+            scores = scores_por_avenida()
+            privilegios_cruzados = sorted(
+                (
+                    {"avenida": avenida, "score": scores[avenida]}
+                    for avenida in metros_por_avenida
+                    if avenida in scores
+                ),
+                key=lambda p: -p["score"],
+            )
     except Exception:
-        pass  # sin datos de trafico, se muestra solo el ETA base
+        pass  # sin datos de trafico/privilegios, se muestra solo el ETA base
 
     return {
         "distance_m": path["distance"],
         "time_s": time_s,
         "time_s_con_trafico": round(time_s_con_trafico, 1),
-        "avenidas_cruzadas": avenidas_cruzadas,
+        "privilegios_cruzados": privilegios_cruzados,
         "geometry": path["points"],
     }

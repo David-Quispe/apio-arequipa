@@ -29,12 +29,18 @@ En vez de cubrir toda Arequipa, el proyecto se enfoca en el corredor entre
 la zona de mayor crecimiento poblacional (Cono Norte) y el clúster
 hospitalario del Cercado:
 
-- **Origen:** Cayma, Yanahuara, Cerro Colorado
+- **Origen:** Cono Norte (Cerro Colorado -incluyendo Peruarbo, Río Seco y
+  Zamácola-, Cayma, Yanahuara)
 - **Destinos:** Hospital Honorio Delgado Espinoza (MINSA), Hospital
   Goyeneche (MINSA), Hospital Nacional Carlos Alberto Seguín Escobedo
   (EsSalud), Clínica Arequipa (privada)
 - **Vías principales:** Av. Ejército, Puente Grau, Av. Bolognesi, Av.
   Dolores, Av. Daniel Alcides Carrión, Av. Goyeneche/Peral/El Filtro
+
+El área de cobertura real (grafo cargado en GraphHopper/PostGIS) es el
+rectángulo `-71.63,-16.42` a `-71.52,-16.33` — un origen o destino fuera de
+ese rectángulo no tiene ruta calculable (ver `CORRIDOR_BBOX` en
+`backend/scripts/load_osm_graph.py`).
 
 Más contexto y el cronograma completo en
 [Proyecto_APIO_Resumen_Planificacion.docx](Proyecto_APIO_Resumen_Planificacion.docx).
@@ -75,7 +81,7 @@ cp .env.example .env  # y completar TOMTOM_API_KEY (gratis en developer.tomtom.c
 el repo por su tamaño, ver `routing/config.yml` para dónde deben ir)
 ```bash
 cd routing
-java -Xmx2g -jar graphhopper-web-11.0.jar server config.yml
+java -Xmx3g -jar graphhopper-web-11.0.jar server config.yml
 ```
 
 **4. Frontend**
@@ -93,7 +99,7 @@ npm run dev
 - [x] Buscador de dirección, PWA instalable, iconos por tipo de hospital
 - [x] Rúbrica de privilegios: 5 criterios (jerarquía vial, carriles/ancho,
       semáforos por km, separador central, congestión observada) calculados
-      sobre los 130 segmentos reales del corredor (tabla `privilegios_via` en
+      sobre los ~156 segmentos reales del corredor (tabla `privilegios_via` en
       PostGIS). La congestión es de una sola observación puntual, no una
       medición repetida — punto de partida, no definitiva.
 - [x] `custom_model` de GraphHopper ajustado para preferir vías de mayor
@@ -102,5 +108,15 @@ npm run dev
       con congestión actual por avenida (cacheada 60s), panel en el mapa, y
       ETA de `/api/route` ajustado según las avenidas que la ruta realmente
       cruza (ST_Intersects sobre `privilegios_via`)
+- [x] Privilegios de vía conectados al ruteo real: las 8 avenidas del
+      corredor son "áreas" nativas del `custom_model` de GraphHopper
+      (`backend/scripts/generar_privilegios_graphhopper.py`), con un plus de
+      prioridad proporcional a su `score_con_campo` — la ruta elegida ahora
+      sí prefiere las vías donde es más viable ejercer el privilegio legal,
+      no solo las de mayor jerarquía genérica. `/api/route` devuelve
+      `privilegios_cruzados` (avenida + score) y se muestra en el mapa.
+- [x] Manejo de origen/destino fuera del área piloto: `/api/route` distingue
+      el error de GraphHopper (`PointNotFoundException`/`PointOutOfBoundsException`)
+      y devuelve un mensaje claro en vez de un error genérico
 - [ ] Recálculo automático de ruta cuando cambia el tráfico (hoy solo se
       recalcula al pedir una ruta nueva)

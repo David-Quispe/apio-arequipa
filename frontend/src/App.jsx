@@ -6,9 +6,10 @@ import './App.css'
 
 const API_BASE = 'http://localhost:8000/api'
 
-// Bbox del corredor piloto (west, south, east, north) - mismo usado para
-// descargar el grafo vial en GraphHopper y PostGIS.
-const CORRIDOR_VIEWBOX = '-71.585,-16.360,-71.520,-16.415'
+// Bbox del corredor piloto (west, north, east, south para el viewbox de
+// Nominatim) - mismo usado para descargar el grafo vial en GraphHopper y
+// PostGIS (ver CORRIDOR_BBOX en backend/scripts/load_osm_graph.py).
+const CORRIDOR_VIEWBOX = '-71.63,-16.33,-71.52,-16.42'
 
 const TIPO_COLORES = {
   MINSA: '#2563eb',
@@ -94,7 +95,10 @@ async function calcularRuta(origen, destino) {
     dest_lon: destino[1],
   })
   const res = await fetch(`${API_BASE}/route?${params}`)
-  if (!res.ok) throw new Error('No se pudo calcular la ruta')
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail || 'No se pudo calcular la ruta')
+  }
   return res.json()
 }
 
@@ -160,7 +164,7 @@ function App() {
         distancia_m: resultado.distance_m,
         tiempo_s: resultado.time_s,
         tiempo_s_con_trafico: resultado.time_s_con_trafico,
-        avenidas_cruzadas: resultado.avenidas_cruzadas,
+        privilegios_cruzados: resultado.privilegios_cruzados,
       })
     } catch (e) {
       setError(e.message)
@@ -223,10 +227,12 @@ function App() {
               {(ruta.tiempo_s / 60).toFixed(1)} min
             </span>{' '}
             → <strong>{(ruta.tiempo_s_con_trafico / 60).toFixed(1)} min</strong> con tráfico actual
-            {ruta.avenidas_cruzadas?.length > 0 && (
+            {ruta.privilegios_cruzados?.length > 0 && (
               <>
                 <br />
-                <span className="panel-ayuda">vía {ruta.avenidas_cruzadas.join(', ')}</span>
+                <span className="panel-ayuda">
+                  vía {ruta.privilegios_cruzados.map((p) => `${p.avenida} (priv. ${p.score}/10)`).join(', ')}
+                </span>
               </>
             )}
           </p>
