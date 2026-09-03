@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+
+# Node / frontend (para cuando exista frontend/)
+node_modules/
+dist/
+build/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Datos pesados (extractos OSM, grafos exportados)
+*.osm.pbf
+*.graphhopper/
+backend/cache/
+
+# GraphHopper (jar pesado, datos de import y cache del grafo, logs)
+routing/*.jar
+routing/data/
+routing/logs/
+routing/gh.log

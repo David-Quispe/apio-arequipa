@@ -1,0 +1,29 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.panel {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  max-width: 320px;
+  text-align: center;
+}
+
+.panel p {
+  margin: 4px 0 0;
+}
+
+.panel-error {
+  color: #e11d48;
+}

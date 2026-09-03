@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+sqlalchemy
+geoalchemy2
+psycopg2-binary
+osmnx
+networkx
+httpx
