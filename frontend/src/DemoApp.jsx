@@ -172,7 +172,10 @@ function DemoApp() {
               <>
                 <br />
                 <span className="panel-ayuda">
-                  vía {ruta.privilegios_cruzados.map((p) => `${p.avenida} (priv. ${p.score}/10)`).join(', ')}
+                  vía{' '}
+                  {ruta.privilegios_cruzados
+                    .map((p) => `${p.avenida} (${p.tipo_principal} ${p.tipo_principal_score}/10)`)
+                    .join(', ')}
                 </span>
               </>
             )}

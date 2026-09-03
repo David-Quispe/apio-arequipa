@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
 from app.services.corridor_overlap import avenidas_en_ruta
-from app.services.privilegios import scores_por_avenida
+from app.services.privilegios import detalle_privilegios_por_avenida
 from app.services.traffic import factor_ajuste_eta, obtener_trafico_corredor
 
 router = APIRouter()
@@ -51,14 +51,14 @@ async def get_route(origin_lat: float, origin_lon: float, dest_lat: float, dest_
             ) / total_metros
             time_s_con_trafico = time_s * factor_ajuste_eta(ratio_ponderado)
 
-            scores = scores_por_avenida()
+            detalle = detalle_privilegios_por_avenida()
             privilegios_cruzados = sorted(
                 (
-                    {"avenida": avenida, "score": scores[avenida]}
+                    {"avenida": avenida, **detalle[avenida]}
                     for avenida in metros_por_avenida
-                    if avenida in scores
+                    if avenida in detalle
                 ),
-                key=lambda p: -p["score"],
+                key=lambda p: -p["general"],
             )
     except Exception:
         pass  # sin datos de trafico/privilegios, se muestra solo el ETA base

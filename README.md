@@ -153,6 +153,12 @@ actualiza sola (a diferencia del tráfico, que sí es en vivo).
       sí prefiere las vías donde es más viable ejercer el privilegio legal,
       no solo las de mayor jerarquía genérica. `/api/route` devuelve
       `privilegios_cruzados` (avenida + score) y se muestra en el mapa.
+- [x] Clasificación por tipo de privilegio específico: además del puntaje
+      compuesto de viabilidad, cada avenida tiene un puntaje propio para
+      contraflujo, carril exclusivo y cruce de semáforo en rojo
+      (`backend/scripts/clasificar_privilegios_especificos.py`), y `/api/route`
+      indica cuál es el más viable en cada una (ej. "Av. Ejército — carril
+      exclusivo 6.6/10" en vez de un número genérico de "viabilidad")
 - [x] Manejo de origen/destino fuera del área piloto: `/api/route` distingue
       el error de GraphHopper (`PointNotFoundException`/`PointOutOfBoundsException`)
       y devuelve un mensaje claro en vez de un error genérico

@@ -20,7 +20,7 @@ import httpx
 
 from app.core.config import settings
 from app.services.corridor_overlap import avenidas_en_ruta
-from app.services.privilegios import scores_por_avenida
+from app.services.privilegios import detalle_privilegios_por_avenida
 
 ORIGENES = [
     {"id": "cerro_colorado", "nombre": "Cerro Colorado", "posicion": [-16.3772567, -71.5581999]},
@@ -71,7 +71,7 @@ def calcular_ruta(origen, destino):
 
 
 def main():
-    scores = scores_por_avenida()
+    detalle = detalle_privilegios_por_avenida()
     rutas = {}
 
     for origen in ORIGENES:
@@ -82,11 +82,11 @@ def main():
             metros_por_avenida = avenidas_en_ruta(path["points"]["coordinates"])
             privilegios_cruzados = sorted(
                 (
-                    {"avenida": avenida, "score": scores[avenida]}
+                    {"avenida": avenida, **detalle[avenida]}
                     for avenida in metros_por_avenida
-                    if avenida in scores
+                    if avenida in detalle
                 ),
-                key=lambda p: -p["score"],
+                key=lambda p: -p["general"],
             )
             rutas[clave] = {
                 "distance_m": path["distance"],

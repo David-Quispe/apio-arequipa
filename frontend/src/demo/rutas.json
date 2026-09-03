@@ -769,17 +769,31 @@
         ]
       },
       "metros_por_avenida": {
-        "Av. Alcides Carrion": 951.135576594578,
-        "Av. Ejercito": 2244.1339724800305
+        "Av. Alcides Carrion": 951.1355765945782,
+        "Av. Ejercito": 2244.133972480031
       },
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Av. Alcides Carrion",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 4.5,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         }
       ]
     },
@@ -1175,15 +1189,36 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Goyeneche",
-          "score": 6.0
+          "general": 6.0,
+          "especificos": {
+            "contraflujo": 8.1,
+            "carril_exclusivo": 6.3,
+            "cruce_rojo": 7.7
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.1
         },
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Av. Bolognesi",
-          "score": 4.7
+          "general": 4.7,
+          "especificos": {
+            "contraflujo": 6.5,
+            "carril_exclusivo": 5.0,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 6.5
         }
       ]
     },
@@ -1672,19 +1707,47 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Puente Grau",
-          "score": 5.2
+          "general": 5.2,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 5.3,
+            "cruce_rojo": 5.4
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         },
         {
           "avenida": "El Filtro",
-          "score": 4.6
+          "general": 4.6,
+          "especificos": {
+            "contraflujo": 7.0,
+            "carril_exclusivo": 5.0,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 7.0
         },
         {
           "avenida": "Peral",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 8.5,
+            "carril_exclusivo": 4.7,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.5
         }
       ]
     },
@@ -1889,12 +1952,19 @@
         ]
       },
       "metros_por_avenida": {
-        "Av. Ejercito": 3510.0015904888064
+        "Av. Ejercito": 3510.001590488807
       },
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         }
       ]
     },
@@ -2555,17 +2625,31 @@
         ]
       },
       "metros_por_avenida": {
-        "Av. Alcides Carrion": 951.1355765945782,
+        "Av. Alcides Carrion": 951.135576594578,
         "Av. Ejercito": 60.07534723102572
       },
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Av. Alcides Carrion",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 4.5,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         }
       ]
     },
@@ -2968,11 +3052,25 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Goyeneche",
-          "score": 6.0
+          "general": 6.0,
+          "especificos": {
+            "contraflujo": 8.1,
+            "carril_exclusivo": 6.3,
+            "cruce_rojo": 7.7
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.1
         },
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         }
       ]
     },
@@ -3421,7 +3519,7 @@
         ]
       },
       "metros_por_avenida": {
-        "Av. Ejercito": 1012.6050314416353,
+        "Av. Ejercito": 1012.6050314416352,
         "El Filtro": 46.03525119961088,
         "Peral": 524.9049110010491,
         "Puente Grau": 31.048388125990318
@@ -3429,19 +3527,47 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Puente Grau",
-          "score": 5.2
+          "general": 5.2,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 5.3,
+            "cruce_rojo": 5.4
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         },
         {
           "avenida": "El Filtro",
-          "score": 4.6
+          "general": 4.6,
+          "especificos": {
+            "contraflujo": 7.0,
+            "carril_exclusivo": 5.0,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 7.0
         },
         {
           "avenida": "Peral",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 8.5,
+            "carril_exclusivo": 4.7,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.5
         }
       ]
     },
@@ -3619,7 +3745,14 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         }
       ]
     },
@@ -4205,7 +4338,14 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Alcides Carrion",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 4.5,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         }
       ]
     },
@@ -4527,7 +4667,14 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Goyeneche",
-          "score": 6.0
+          "general": 6.0,
+          "especificos": {
+            "contraflujo": 8.1,
+            "carril_exclusivo": 6.3,
+            "cruce_rojo": 7.7
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.1
         }
       ]
     },
@@ -4892,19 +5039,47 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Puente Grau",
-          "score": 5.2
+          "general": 5.2,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 5.3,
+            "cruce_rojo": 5.4
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         },
         {
           "avenida": "El Filtro",
-          "score": 4.6
+          "general": 4.6,
+          "especificos": {
+            "contraflujo": 7.0,
+            "carril_exclusivo": 5.0,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 7.0
         },
         {
           "avenida": "Peral",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 8.5,
+            "carril_exclusivo": 4.7,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.5
         }
       ]
     },
@@ -4985,12 +5160,19 @@
         ]
       },
       "metros_por_avenida": {
-        "Av. Ejercito": 954.1518495266456
+        "Av. Ejercito": 954.1518495266457
       },
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         }
       ]
     },
@@ -5931,17 +6113,31 @@
         ]
       },
       "metros_por_avenida": {
-        "Av. Alcides Carrion": 951.135576594578,
-        "Av. Ejercito": 2244.1339724800305
+        "Av. Alcides Carrion": 951.1355765945782,
+        "Av. Ejercito": 2244.133972480031
       },
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Av. Alcides Carrion",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 4.5,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         }
       ]
     },
@@ -6581,15 +6777,36 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Goyeneche",
-          "score": 6.0
+          "general": 6.0,
+          "especificos": {
+            "contraflujo": 8.1,
+            "carril_exclusivo": 6.3,
+            "cruce_rojo": 7.7
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.1
         },
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Av. Bolognesi",
-          "score": 4.7
+          "general": 4.7,
+          "especificos": {
+            "contraflujo": 6.5,
+            "carril_exclusivo": 5.0,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 6.5
         }
       ]
     },
@@ -7322,19 +7539,47 @@
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         },
         {
           "avenida": "Puente Grau",
-          "score": 5.2
+          "general": 5.2,
+          "especificos": {
+            "contraflujo": 9.0,
+            "carril_exclusivo": 5.3,
+            "cruce_rojo": 5.4
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 9.0
         },
         {
           "avenida": "El Filtro",
-          "score": 4.6
+          "general": 4.6,
+          "especificos": {
+            "contraflujo": 7.0,
+            "carril_exclusivo": 5.0,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 7.0
         },
         {
           "avenida": "Peral",
-          "score": 4.5
+          "general": 4.5,
+          "especificos": {
+            "contraflujo": 8.5,
+            "carril_exclusivo": 4.7,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Contraflujo",
+          "tipo_principal_score": 8.5
         }
       ]
     },
@@ -7783,12 +8028,19 @@
         ]
       },
       "metros_por_avenida": {
-        "Av. Ejercito": 3510.0015904888064
+        "Av. Ejercito": 3510.001590488807
       },
       "privilegios_cruzados": [
         {
           "avenida": "Av. Ejercito",
-          "score": 5.9
+          "general": 5.9,
+          "especificos": {
+            "contraflujo": 3.0,
+            "carril_exclusivo": 6.6,
+            "cruce_rojo": 2.0
+          },
+          "tipo_principal": "Carril exclusivo",
+          "tipo_principal_score": 6.6
         }
       ]
     }
