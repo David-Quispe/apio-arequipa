@@ -61,6 +61,7 @@ docker compose up -d
 cd backend
 python -m venv .venv
 ./.venv/Scripts/pip install -r requirements.txt
+cp .env.example .env  # y completar TOMTOM_API_KEY (gratis en developer.tomtom.com)
 ./.venv/Scripts/python -m uvicorn app.main:app --reload --port 8000
 ```
 
@@ -91,4 +92,9 @@ npm run dev
       medición repetida — punto de partida, no definitiva.
 - [x] `custom_model` de GraphHopper ajustado para preferir vías de mayor
       jerarquía y más carriles (2 de los 5 criterios, aplicados a toda la red)
-- [ ] Tráfico en tiempo real (reemplazaría la observación puntual de congestión)
+- [x] Tráfico en tiempo real (TomTom Traffic Flow API): endpoint `/api/traffic`
+      con congestión actual por avenida (cacheada 60s), panel en el mapa, y
+      ETA de `/api/route` ajustado según las avenidas que la ruta realmente
+      cruza (ST_Intersects sobre `privilegios_via`)
+- [ ] Recálculo automático de ruta cuando cambia el tráfico (hoy solo se
+      recalcula al pedir una ruta nueva)

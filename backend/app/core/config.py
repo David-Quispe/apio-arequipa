@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://apio:apio@localhost:5432/apio"
     graphhopper_url: str = "http://localhost:8989"
+    tomtom_api_key: str = ""
 
     cors_origins: list[str] = ["http://localhost:5173"]
 

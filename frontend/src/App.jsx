@@ -44,6 +44,14 @@ const DESTINOS = [
 const CENTRO_AREQUIPA = [-16.3989, -71.5369]
 const ORIGEN_INICIAL = [-16.3833, -71.55] // Cerro Colorado, zona de origen del corredor
 
+const TRAFICO_INTERVALO_MS = 25000
+const NIVEL_COLORES = {
+  baja: '#059669',
+  media: '#d97706',
+  alta: '#dc2626',
+  sin_datos: '#9ca3af',
+}
+
 function crearIconoCircular({ emoji, color, size = 30 }) {
   return new L.DivIcon({
     className: '',
@@ -90,6 +98,13 @@ async function calcularRuta(origen, destino) {
   return res.json()
 }
 
+async function obtenerTrafico() {
+  const res = await fetch(`${API_BASE}/traffic`)
+  if (!res.ok) throw new Error('No se pudo obtener el tráfico')
+  const data = await res.json()
+  return data.avenidas
+}
+
 async function buscarDireccion(query) {
   const params = new URLSearchParams({
     format: 'json',
@@ -115,6 +130,22 @@ function App() {
   const [error, setError] = useState(null)
   const [busqueda, setBusqueda] = useState('')
   const [buscando, setBuscando] = useState(false)
+  const [trafico, setTrafico] = useState([])
+
+  useEffect(() => {
+    let activo = true
+    const actualizar = () => {
+      obtenerTrafico()
+        .then((data) => activo && setTrafico(data))
+        .catch(() => {})
+    }
+    actualizar()
+    const intervalo = setInterval(actualizar, TRAFICO_INTERVALO_MS)
+    return () => {
+      activo = false
+      clearInterval(intervalo)
+    }
+  }, [])
 
   const handleSeleccionarDestino = async (destino) => {
     setCargando(true)
@@ -124,7 +155,13 @@ function App() {
       const resultado = await calcularRuta(origen, destino.posicion)
       // GeoJSON viene como [lon, lat]; Leaflet necesita [lat, lon]
       const puntos = resultado.geometry.coordinates.map(([lon, lat]) => [lat, lon])
-      setRuta({ puntos, distancia_m: resultado.distance_m, tiempo_s: resultado.time_s })
+      setRuta({
+        puntos,
+        distancia_m: resultado.distance_m,
+        tiempo_s: resultado.time_s,
+        tiempo_s_con_trafico: resultado.time_s_con_trafico,
+        avenidas_cruzadas: resultado.avenidas_cruzadas,
+      })
     } catch (e) {
       setError(e.message)
       setRuta(null)
@@ -180,9 +217,32 @@ function App() {
           <p>
             <strong>{destinoActivo}</strong>
             <br />
-            {(ruta.distancia_m / 1000).toFixed(2)} km · {(ruta.tiempo_s / 60).toFixed(1)} min
+            {(ruta.distancia_m / 1000).toFixed(2)} km
+            <br />
+            <span style={{ textDecoration: 'line-through', color: '#9ca3af' }}>
+              {(ruta.tiempo_s / 60).toFixed(1)} min
+            </span>{' '}
+            → <strong>{(ruta.tiempo_s_con_trafico / 60).toFixed(1)} min</strong> con tráfico actual
+            {ruta.avenidas_cruzadas?.length > 0 && (
+              <>
+                <br />
+                <span className="panel-ayuda">vía {ruta.avenidas_cruzadas.join(', ')}</span>
+              </>
+            )}
           </p>
         )}
+      </div>
+
+      <div className="panel-trafico">
+        <strong>Tráfico del corredor</strong>
+        <ul>
+          {trafico.map((t) => (
+            <li key={t.avenida}>
+              <span className="dot" style={{ background: NIVEL_COLORES[t.nivel] }} />
+              {t.avenida}
+            </li>
+          ))}
+        </ul>
       </div>
 
       <MapContainer center={CENTRO_AREQUIPA} zoom={14} style={{ height: '100%', width: '100%' }}>
