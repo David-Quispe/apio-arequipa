@@ -50,6 +50,12 @@ routing/    Configuración de GraphHopper (custom model, config.yml)
 
 ## Cómo levantar el entorno local
 
+**Atajo:** una vez que backend y GraphHopper ya están configurados (pasos 2 y 3
+hechos al menos una vez), `./start.ps1` levanta Docker, GraphHopper y el
+backend de una sola vez (detecta lo que ya esté corriendo). `./stop.ps1` los
+detiene (agregá `-Todo` para bajar también la base de datos). El frontend se
+deja aparte (`cd frontend; npm run dev`) para ver su output en la terminal.
+
 **1. Base de datos (PostgreSQL + PostGIS)**
 ```bash
 cd infra

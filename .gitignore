@@ -33,3 +33,4 @@ routing/*.jar
 routing/data/
 routing/logs/
 routing/gh.log
+routing/gh-err.log
