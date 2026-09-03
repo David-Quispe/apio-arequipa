@@ -1,7 +1,17 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+}
+
+#map-container {
+  height: 100dvh;
+  width: 100vw;
+  position: relative;
 }
 
 .panel {
@@ -16,14 +26,63 @@ html, body, #root {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   font-family: system-ui, sans-serif;
   font-size: 13px;
-  max-width: 320px;
+  width: min(320px, calc(100vw - 24px));
   text-align: center;
 }
 
 .panel p {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
+}
+
+.panel-ayuda {
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .panel-error {
   color: #e11d48;
+}
+
+.panel-busqueda {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.panel-busqueda input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.panel-busqueda button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #e11d48;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.panel-busqueda button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  .panel {
+    top: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .panel-busqueda input {
+    font-size: 16px; /* evita zoom automatico en iOS al enfocar */
+  }
 }
