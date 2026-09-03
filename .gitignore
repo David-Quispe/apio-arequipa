@@ -20,6 +20,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Config local de Claude Code (no es parte del proyecto)
+.claude/
+
 # Datos pesados (extractos OSM, grafos exportados)
 *.osm.pbf
 *.graphhopper/
