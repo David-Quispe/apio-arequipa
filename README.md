@@ -83,6 +83,12 @@ npm run dev
 - [x] Backend, frontend, base de datos y motor de ruteo funcionando end-to-end
 - [x] Grafo vial del corredor piloto cargado en PostGIS y en GraphHopper
 - [x] Mapa interactivo: selección de origen y cálculo de ruta real
-- [ ] Rúbrica de clasificación de privilegios por segmento vial (pendiente)
-- [ ] Tabla de privilegios en PostGIS integrada al modelo de costos de GraphHopper
-- [ ] Tráfico en tiempo real
+- [x] Buscador de dirección, PWA instalable, iconos por tipo de hospital
+- [x] Rúbrica de privilegios: 5 criterios (jerarquía vial, carriles/ancho,
+      semáforos por km, separador central, congestión observada) calculados
+      sobre los 130 segmentos reales del corredor (tabla `privilegios_via` en
+      PostGIS). La congestión es de una sola observación puntual, no una
+      medición repetida — punto de partida, no definitiva.
+- [x] `custom_model` de GraphHopper ajustado para preferir vías de mayor
+      jerarquía y más carriles (2 de los 5 criterios, aplicados a toda la red)
+- [ ] Tráfico en tiempo real (reemplazaría la observación puntual de congestión)
