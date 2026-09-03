@@ -4,6 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    // Solo para probar el modo demo en local (npm run dev:demo) -- redirige
+    // /api hacia frontend/scripts/demo-api-server.mjs. En produccion (Vercel)
+    // esto no aplica: Vercel enruta /api a las funciones el mismo.
+    proxy: {
+      '/api': 'http://localhost:8787',
+    },
+  },
   plugins: [
     react(),
     VitePWA({

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -136,12 +136,44 @@ function App() {
   const [buscando, setBuscando] = useState(false)
   const [trafico, setTrafico] = useState([])
 
+  // Refs (no disparan renders) para que el intervalo de tráfico sepa cuál es
+  // el origen/destino activo *en el momento en que se ejecuta*, sin tener que
+  // reiniciar el setInterval cada vez que el usuario cambia de ruta.
+  const origenRef = useRef(origen)
+  const destinoActivoRef = useRef(null)
+
+  useEffect(() => {
+    origenRef.current = origen
+  }, [origen])
+
   useEffect(() => {
     let activo = true
-    const actualizar = () => {
-      obtenerTrafico()
-        .then((data) => activo && setTrafico(data))
-        .catch(() => {})
+    const actualizar = async () => {
+      try {
+        const data = await obtenerTrafico()
+        if (!activo) return
+        setTrafico(data)
+
+        // Recalcula el ETA de la ruta activa con el tráfico recién obtenido
+        // (mismo intervalo de 25s) en vez de esperar a que el usuario pida
+        // una ruta nueva. La ruta en sí (geometría/distancia) no cambia --
+        // el tráfico solo ajusta el ETA, ver memoria del proyecto.
+        if (destinoActivoRef.current) {
+          const resultado = await calcularRuta(origenRef.current, destinoActivoRef.current.posicion)
+          if (!activo || !destinoActivoRef.current) return
+          setRuta((actual) =>
+            actual && {
+              ...actual,
+              tiempo_s: resultado.time_s,
+              tiempo_s_con_trafico: resultado.time_s_con_trafico,
+              privilegios_cruzados: resultado.privilegios_cruzados,
+            }
+          )
+        }
+      } catch {
+        // silencioso: un fallo en la actualizacion periodica no debe tirar
+        // abajo la ruta/panel que ya estan mostrandose
+      }
     }
     actualizar()
     const intervalo = setInterval(actualizar, TRAFICO_INTERVALO_MS)
@@ -155,6 +187,7 @@ function App() {
     setCargando(true)
     setError(null)
     setDestinoActivo(destino.nombre)
+    destinoActivoRef.current = destino
     try {
       const resultado = await calcularRuta(origen, destino.posicion)
       // GeoJSON viene como [lon, lat]; Leaflet necesita [lat, lon]
@@ -169,6 +202,7 @@ function App() {
     } catch (e) {
       setError(e.message)
       setRuta(null)
+      destinoActivoRef.current = null
     } finally {
       setCargando(false)
     }
@@ -179,6 +213,7 @@ function App() {
     setCentrarEn(null)
     setRuta(null)
     setDestinoActivo(null)
+    destinoActivoRef.current = null
   }
 
   const handleBuscar = async (e) => {
@@ -192,6 +227,7 @@ function App() {
       setCentrarEn(encontrado)
       setRuta(null)
       setDestinoActivo(null)
+      destinoActivoRef.current = null
     } catch (e) {
       setError(e.message)
     } finally {
@@ -227,6 +263,7 @@ function App() {
               {(ruta.tiempo_s / 60).toFixed(1)} min
             </span>{' '}
             → <strong>{(ruta.tiempo_s_con_trafico / 60).toFixed(1)} min</strong> con tráfico actual
+            <span className="panel-ayuda"> (se actualiza solo)</span>
             {ruta.privilegios_cruzados?.length > 0 && (
               <>
                 <br />

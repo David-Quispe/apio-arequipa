@@ -91,6 +91,44 @@ npm install
 npm run dev
 ```
 
+## Demo sin servidor propio
+
+Para mostrar APIO sin depender de que la laptop de David esté prendida con
+todo el stack corriendo, hay un **modo demo**: mismo frontend/mapa, pero sin
+GraphHopper/PostGIS reales detrás.
+
+- Las rutas son un set fijo precalculado (4 orígenes del Cono Norte × 4
+  hospitales, `frontend/src/demo/rutas.json`, generado corriendo
+  `backend/scripts/generar_demo_rutas.py` contra el backend real) — solo se
+  puede elegir origen/destino de esas listas, no cualquier punto del mapa.
+- El **tráfico y el ETA sí son reales**: dos funciones serverless
+  (`frontend/api/route.js`, `frontend/api/traffic.js`) consultan TomTom en
+  el momento y aplican la misma fórmula que `backend/app/api/routes/route.py`
+  (duplicada a propósito en JS, ver comentario en `frontend/api/_trafico.js`).
+- Se activa con la variable de entorno `VITE_DEMO_MODE=true` en el build
+  (`frontend/src/main.jsx` elige entre `App.jsx` y `DemoApp.jsx`); en local
+  nunca se define, así que `npm run dev` siempre usa la app real.
+
+**Probarlo en local antes de desplegar:**
+```bash
+cd frontend
+TOMTOM_API_KEY=... npm run dev:demo-api   # sirve /api/route y /api/traffic en :8787
+npm run dev:demo                          # vite en modo demo, con proxy /api -> :8787
+```
+
+**Desplegar en Vercel (gratis):**
+1. Crear una cuenta en [vercel.com](https://vercel.com) (con GitHub) e importar
+   el repo `apio-arequipa`.
+2. En la configuración del proyecto, "Root Directory" → `frontend`.
+3. Agregar dos variables de entorno: `VITE_DEMO_MODE=true` y
+   `TOMTOM_API_KEY=...` (la de `developer.tomtom.com`, la misma del backend).
+4. Deploy. Vercel detecta Vite automáticamente y sirve `frontend/api/*.js`
+   como funciones serverless sin configuración adicional.
+
+Si cambia la rúbrica de privilegios o el corredor, hay que volver a correr
+`generar_demo_rutas.py` y redeployar para que la demo quede al día — no se
+actualiza sola (a diferencia del tráfico, que sí es en vivo).
+
 ## Estado actual
 
 - [x] Backend, frontend, base de datos y motor de ruteo funcionando end-to-end
@@ -118,5 +156,10 @@ npm run dev
 - [x] Manejo de origen/destino fuera del área piloto: `/api/route` distingue
       el error de GraphHopper (`PointNotFoundException`/`PointOutOfBoundsException`)
       y devuelve un mensaje claro en vez de un error genérico
-- [ ] Recálculo automático de ruta cuando cambia el tráfico (hoy solo se
-      recalcula al pedir una ruta nueva)
+- [x] El ETA de la ruta activa se refresca solo cada 25s (mismo intervalo que
+      el panel de tráfico), sin esperar a que el usuario pida una ruta nueva.
+      Sigue sin recalcularse el *camino* elegido (eso es una decisión de
+      diseño ya documentada — el tráfico ajusta el ETA, no la ruta)
+- [x] Modo demo desplegable gratis (Vercel, sin backend/GraphHopper propios
+      corriendo) con rutas fijas precalculadas pero tráfico/ETA en vivo — ver
+      [Demo sin servidor propio](#demo-sin-servidor-propio)
