@@ -1,0 +1,34 @@
+name: Muestreo de tráfico
+
+# Corre sola cada 3 horas (sin depender de que la laptop de David este
+# prendida): consulta el trafico en vivo de la demo ya desplegada en Vercel
+# y comitea el resultado a data/trafico_historico.jsonl. Ver
+# scripts/muestreo-trafico.mjs y backend/scripts/actualizar_congestion_desde_historico.py.
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  muestrear:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Registrar muestra de tráfico
+        run: node scripts/muestreo-trafico.mjs
+
+      - name: Comitear resultado
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/trafico_historico.jsonl
+          git diff --cached --quiet || git commit -m "Registra muestra de tráfico $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push

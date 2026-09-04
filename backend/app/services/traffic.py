@@ -33,7 +33,7 @@ PUNTOS_AVENIDAS = {
 _cache: dict = {"timestamp": 0, "data": None}
 
 
-def _nivel(ratio: float) -> str:
+def nivel(ratio: float) -> str:
     if ratio >= 0.75:
         return "baja"
     if ratio >= 0.5:
@@ -67,7 +67,7 @@ async def _consultar_avenida(client: httpx.AsyncClient, nombre: str, punto: tupl
             "current_speed_kmh": current,
             "free_flow_speed_kmh": libre,
             "ratio": round(ratio, 2),
-            "nivel": _nivel(ratio),
+            "nivel": nivel(ratio),
         }
     except Exception as e:
         return {"avenida": nombre, "error": str(e), "ratio": 1.0, "nivel": "sin_datos"}

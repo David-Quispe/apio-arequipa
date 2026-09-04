@@ -16,8 +16,14 @@ async def get_route(origin_lat: float, origin_lon: float, dest_lat: float, dest_
         "profile": "car",
         "points_encoded": "false",
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{settings.graphhopper_url}/route", params=params)
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{settings.graphhopper_url}/route", params=params, timeout=10)
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo conectar con el motor de ruteo (GraphHopper). ¿Está corriendo?",
+        )
 
     if response.status_code != 200:
         try:

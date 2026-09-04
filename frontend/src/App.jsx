@@ -94,7 +94,12 @@ async function calcularRuta(origen, destino) {
     dest_lat: destino[0],
     dest_lon: destino[1],
   })
-  const res = await fetch(`${API_BASE}/route?${params}`)
+  let res
+  try {
+    res = await fetch(`${API_BASE}/route?${params}`)
+  } catch {
+    throw new Error('No se pudo conectar con el backend. ¿Está corriendo? (./start.ps1)')
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     throw new Error(body?.detail || 'No se pudo calcular la ruta')

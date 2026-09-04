@@ -48,10 +48,12 @@ Más contexto y el cronograma completo en
 ## Estructura del repositorio
 
 ```
-backend/    API FastAPI (proxy hacia GraphHopper, futura tabla de privilegios)
-frontend/   Mapa React + Leaflet del corredor piloto
+backend/    API FastAPI (proxy hacia GraphHopper, tabla de privilegios, tests)
+frontend/   Mapa React + Leaflet del corredor piloto + demo en Vercel
 infra/      docker-compose.yml (PostgreSQL + PostGIS)
 routing/    Configuración de GraphHopper (custom model, config.yml)
+scripts/    Automatizaciones a nivel de repo (muestreo de tráfico)
+data/       Datos acumulados por esas automatizaciones (histórico de tráfico)
 ```
 
 ## Cómo levantar el entorno local
@@ -129,6 +131,37 @@ Si cambia la rúbrica de privilegios o el corredor, hay que volver a correr
 `generar_demo_rutas.py` y redeployar para que la demo quede al día — no se
 actualiza sola (a diferencia del tráfico, que sí es en vivo).
 
+## Muestreo real de tráfico (congestión)
+
+La rúbrica de privilegios usaba `congestion_tipica` como una sola observación
+puntual (una inspección visual, un momento del día). Para reemplazarla por
+algo repetido en el tiempo, [.github/workflows/muestreo-trafico.yml](.github/workflows/muestreo-trafico.yml)
+corre solo cada 3 horas (sin depender de la laptop de David: consulta la
+demo ya desplegada en Vercel) y va acumulando muestras en
+`data/trafico_historico.jsonl`, comiteadas automáticamente al repo.
+
+Después de acumular varios días de muestras, correr:
+```bash
+cd backend
+PYTHONPATH=. ./.venv/Scripts/python scripts/actualizar_congestion_desde_historico.py
+```
+Esto recalcula `congestion_tipica` (y `score_con_campo`) en `privilegios_via`
+a partir del promedio real por avenida en vez de la observación única — avisa
+si todavía hay muy pocas muestras para ser representativo. Después hace falta
+volver a correr `generar_privilegios_graphhopper.py` y reiniciar GraphHopper
+para que el boost de prioridad quede al día.
+
+## Pruebas
+
+```bash
+cd backend
+PYTHONPATH=. ./.venv/Scripts/python -m pytest tests/
+```
+Cubre las funciones de cálculo puras (ajuste de ETA por tráfico, boost de
+GraphHopper, clasificación de contraflujo) y el healthcheck — no requieren
+PostGIS/GraphHopper corriendo. No hay pruebas end-to-end de `/api/route`
+todavía (necesitarían mockear GraphHopper/PostGIS).
+
 ## Estado actual
 
 - [x] Backend, frontend, base de datos y motor de ruteo funcionando end-to-end
@@ -138,8 +171,7 @@ actualiza sola (a diferencia del tráfico, que sí es en vivo).
 - [x] Rúbrica de privilegios: 5 criterios (jerarquía vial, carriles/ancho,
       semáforos por km, separador central, congestión observada) calculados
       sobre los ~156 segmentos reales del corredor (tabla `privilegios_via` en
-      PostGIS). La congestión es de una sola observación puntual, no una
-      medición repetida — punto de partida, no definitiva.
+      PostGIS).
 - [x] `custom_model` de GraphHopper ajustado para preferir vías de mayor
       jerarquía y más carriles (2 de los 5 criterios, aplicados a toda la red)
 - [x] Tráfico en tiempo real (TomTom Traffic Flow API): endpoint `/api/traffic`
@@ -169,3 +201,11 @@ actualiza sola (a diferencia del tráfico, que sí es en vivo).
 - [x] Modo demo desplegable gratis (Vercel, sin backend/GraphHopper propios
       corriendo) con rutas fijas precalculadas pero tráfico/ETA en vivo — ver
       [Demo sin servidor propio](#demo-sin-servidor-propio)
+- [x] Muestreo automático de tráfico real (GitHub Actions, cada 3h, sin
+      depender de la laptop) para reemplazar la observación puntual de
+      congestión por datos repetidos — ver
+      [Muestreo real de tráfico](#muestreo-real-de-tráfico-congestión)
+- [x] Manejo de errores cuando el backend o GraphHopper no responden (además
+      del caso de cobertura): mensajes claros en vez de errores genéricos
+- [x] Pruebas automatizadas (pytest) para las funciones de cálculo del
+      backend — ver [Pruebas](#pruebas)
