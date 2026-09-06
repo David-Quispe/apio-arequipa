@@ -50,11 +50,36 @@ Más contexto y el cronograma completo en
 ```
 backend/    API FastAPI (proxy hacia GraphHopper, tabla de privilegios, tests)
 frontend/   Mapa React + Leaflet del corredor piloto + demo en Vercel
+android/    Cliente Android nativo (Kotlin Multiplatform + Compose), mismo backend
 infra/      docker-compose.yml (PostgreSQL + PostGIS)
 routing/    Configuración de GraphHopper (custom model, config.yml)
 scripts/    Automatizaciones a nivel de repo (muestreo de tráfico)
 data/       Datos acumulados por esas automatizaciones (histórico de tráfico)
 ```
+
+## Cliente Android nativo (Kotlin Multiplatform)
+
+Además de la PWA, hay un cliente Android nativo en `android/` — mismo backend,
+mismo corredor, misma rúbrica de privilegios, sin tocar nada de eso. Se armó
+como Kotlin Multiplatform real (no solo Kotlin/Android) para poder sumar iOS
+después sin reescribir la lógica: `android/shared/src/commonMain` tiene los
+modelos, el cliente HTTP (Ktor) y el estado de la app; `androidMain` tiene
+solo lo que de verdad depende de la plataforma (el mapa con
+[osmdroid](https://github.com/osmdroid/osmdroid), detrás de un
+`expect fun MapaOSM(...)`).
+
+**Requiere el backend real corriendo en local** (`./start.ps1`) — no tiene
+modo demo propio, siempre habla con `http://10.0.2.2:8000/api` (el alias del
+emulador Android hacia el `localhost` del host).
+
+```bash
+cd android
+./gradlew assembleDebug          # compila
+./gradlew :shared:allTests       # corre los tests (modelos, formateo)
+```
+
+Después, instalar el APK (`androidApp/build/outputs/apk/debug/`) en un
+emulador o dispositivo con `adb install`.
 
 ## Cómo levantar el entorno local
 
@@ -209,3 +234,7 @@ todavía (necesitarían mockear GraphHopper/PostGIS).
       del caso de cobertura): mensajes claros en vez de errores genéricos
 - [x] Pruebas automatizadas (pytest) para las funciones de cálculo del
       backend — ver [Pruebas](#pruebas)
+- [x] Cliente Android nativo (Kotlin Multiplatform + Compose, `android/`):
+      mapa, marcadores, ruteo real, privilegios, tráfico en vivo y
+      auto-refresh del ETA contra el mismo backend — ver
+      [Cliente Android nativo](#cliente-android-nativo-kotlin-multiplatform)
