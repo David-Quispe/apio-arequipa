@@ -8,9 +8,14 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import pe.apio.mobile.modelo.COLOR_AMBULANCIA
+import pe.apio.mobile.modelo.COLOR_POR_TIPO
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
 import java.io.File
+
+private const val COLOR_TIPO_DESCONOCIDO = "#6b7280"
 
 private const val ZOOM_INICIAL = 13.0
 
@@ -44,6 +49,31 @@ actual fun MapaOSM(
                 setMultiTouchControls(true)
                 controller.setZoom(ZOOM_INICIAL)
                 controller.setCenter(GeoPoint(origen.lat, origen.lon))
+
+                hospitales.forEach { hospital ->
+                    val marcador = Marker(this)
+                    marcador.position = GeoPoint(hospital.posicion.lat, hospital.posicion.lon)
+                    marcador.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    marcador.icon = crearIconoCircular(
+                        ctx,
+                        emoji = "🏥", // 🏥
+                        colorHex = COLOR_POR_TIPO[hospital.tipo] ?: COLOR_TIPO_DESCONOCIDO,
+                    )
+                    marcador.title = hospital.nombre
+                    marcador.snippet = hospital.tipo
+                    overlays.add(marcador)
+                }
+
+                val marcadorOrigen = Marker(this)
+                marcadorOrigen.position = GeoPoint(origen.lat, origen.lon)
+                marcadorOrigen.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                marcadorOrigen.icon = crearIconoCircular(
+                    ctx,
+                    emoji = "🚑", // 🚑
+                    colorHex = COLOR_AMBULANCIA,
+                    sizeDp = 38,
+                )
+                overlays.add(marcadorOrigen)
             }
         },
     )
