@@ -12,6 +12,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.Polyline
 import pe.apio.mobile.modelo.COLOR_AMBULANCIA
 import pe.apio.mobile.modelo.COLOR_POR_TIPO
 import pe.apio.mobile.modelo.Hospital
@@ -48,6 +49,7 @@ actual fun MapaOSM(
     // -- el punto delicado de mezclar el modelo imperativo de osmdroid con
     // la recomposicion declarativa de Compose.
     val marcadorOrigenRef = remember { arrayOfNulls<Marker>(1) }
+    val polylineRutaRef = remember { arrayOfNulls<Polyline>(1) }
 
     AndroidView(
         modifier = modifier,
@@ -85,8 +87,19 @@ actual fun MapaOSM(
                     )
                     marcador.title = hospital.nombre
                     marcador.snippet = hospital.tipo
+                    marcador.setOnMarkerClickListener { _, _ ->
+                        onTapHospital(hospital)
+                        true
+                    }
                     overlays.add(marcador)
                 }
+
+                val polylineRuta = Polyline(this).apply {
+                    outlinePaint.color = android.graphics.Color.parseColor("#e11d48")
+                    outlinePaint.strokeWidth = 5f * resources.displayMetrics.density
+                }
+                overlays.add(polylineRuta)
+                polylineRutaRef[0] = polylineRuta
 
                 val marcadorOrigen = Marker(this)
                 marcadorOrigen.position = GeoPoint(origen.lat, origen.lon)
@@ -103,6 +116,7 @@ actual fun MapaOSM(
         },
         update = { mapView ->
             marcadorOrigenRef[0]?.position = GeoPoint(origen.lat, origen.lon)
+            polylineRutaRef[0]?.setPoints(rutaPuntos.map { GeoPoint(it.lat, it.lon) })
             mapView.invalidate()
         },
     )
