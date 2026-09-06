@@ -40,7 +40,7 @@ fun PanelInfo(
                 Text(error, color = Color(0xFFDC2626))
             }
             if (ruta != null && !cargando) {
-                Text(ruta.destinoNombre, fontWeight = FontWeight.Bold)
+                Text(ruta.destino.nombre, fontWeight = FontWeight.Bold)
                 Text(formatearDistanciaKm(ruta.distanciaM))
                 Row {
                     Text(
@@ -51,6 +51,7 @@ fun PanelInfo(
                     Text(" → ")
                     Text(formatearMinutos(ruta.tiempoSConTrafico), fontWeight = FontWeight.Bold)
                     Text(" con tráfico actual")
+                    Text(" (se actualiza solo)", fontSize = 12.sp, color = Color.Gray)
                 }
                 if (ruta.privilegiosCruzados.isNotEmpty()) {
                     Text(

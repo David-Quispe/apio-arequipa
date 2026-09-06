@@ -59,6 +59,32 @@ fun App() {
                 // silencioso: un fallo en el sondeo no debe tirar abajo el
                 // panel que ya se esta mostrando
             }
+
+            // Mismo intervalo: si hay una ruta activa, se vuelve a pedir en
+            // silencio (sin `cargando`, sin spinner) para que el ETA se
+            // actualice solo con el trafico mas reciente. El camino
+            // (`puntos`) no cambia -- el trafico ajusta el ETA, no la ruta,
+            // ver memoria del proyecto project_apio_trafico.
+            val rutaActiva = ruta
+            if (rutaActiva != null) {
+                try {
+                    val resultado = apiClient.obtenerRuta(
+                        origenLat = origen.lat,
+                        origenLon = origen.lon,
+                        destLat = rutaActiva.destino.posicion.lat,
+                        destLon = rutaActiva.destino.posicion.lon,
+                    )
+                    ruta = rutaActiva.copy(
+                        tiempoS = resultado.timeS,
+                        tiempoSConTrafico = resultado.timeSConTrafico,
+                        privilegiosCruzados = resultado.privilegiosCruzados,
+                    )
+                } catch (_: Exception) {
+                    // silencioso: no pisar una ruta ya mostrada por un fallo
+                    // de esta actualizacion periodica
+                }
+            }
+
             delay(TRAFICO_INTERVALO_MS)
         }
     }
@@ -89,7 +115,7 @@ fun App() {
                             // GeoJSON viene como [lon, lat]; osmdroid necesita [lat, lon].
                             val puntos = resultado.geometry.coordinates.map { LatLon(it[1], it[0]) }
                             ruta = EstadoRuta(
-                                destinoNombre = hospital.nombre,
+                                destino = hospital,
                                 distanciaM = resultado.distanceM,
                                 tiempoS = resultado.timeS,
                                 tiempoSConTrafico = resultado.timeSConTrafico,
