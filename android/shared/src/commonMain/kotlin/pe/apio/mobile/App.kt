@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,13 +16,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import pe.apio.mobile.mapa.MapaOSM
+import pe.apio.mobile.modelo.AvenidaTrafico
 import pe.apio.mobile.modelo.HOSPITALES
 import pe.apio.mobile.modelo.LatLon
 import pe.apio.mobile.red.ApioApiClient
 import pe.apio.mobile.ui.EstadoRuta
 import pe.apio.mobile.ui.PanelInfo
+import pe.apio.mobile.ui.PanelTrafico
 
 // Cerro Colorado, zona de origen del corredor (mismo punto que
 // ORIGEN_INICIAL en frontend/src/App.jsx).
@@ -31,6 +35,9 @@ private val ORIGEN_INICIAL = LatLon(-16.3833, -71.55)
 // maquina host, donde corre el backend real (ver AndroidManifest.xml /
 // network_security_config.xml para el permiso de trafico sin cifrar).
 private const val API_BASE_URL = "http://10.0.2.2:8000/api"
+
+// Mismo intervalo que TRAFICO_INTERVALO_MS en frontend/src/App.jsx.
+private const val TRAFICO_INTERVALO_MS = 25_000L
 
 @Composable
 @Preview
@@ -42,6 +49,19 @@ fun App() {
     var ruta by remember { mutableStateOf<EstadoRuta?>(null) }
     var cargando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var trafico by remember { mutableStateOf<List<AvenidaTrafico>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                trafico = apiClient.obtenerTrafico().avenidas
+            } catch (_: Exception) {
+                // silencioso: un fallo en el sondeo no debe tirar abajo el
+                // panel que ya se esta mostrando
+            }
+            delay(TRAFICO_INTERVALO_MS)
+        }
+    }
 
     MaterialTheme {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -94,6 +114,13 @@ fun App() {
                     .align(Alignment.TopCenter)
                     .padding(12.dp)
                     .fillMaxWidth(),
+            )
+
+            PanelTrafico(
+                avenidas = trafico,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp),
             )
         }
     }
