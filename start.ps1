@@ -27,8 +27,12 @@ try {
     Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
     do {
         Start-Sleep -Seconds 3
-        docker ps *> $null
-        $listo = $?
+        try {
+            docker ps *> $null
+            $listo = $?
+        } catch {
+            $listo = $false
+        }
     } until ($listo)
 }
 docker compose -f "$root\infra\docker-compose.yml" up -d
