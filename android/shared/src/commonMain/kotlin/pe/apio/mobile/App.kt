@@ -1,6 +1,9 @@
 package pe.apio.mobile
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -8,13 +11,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import pe.apio.mobile.mapa.MapaOSM
 import pe.apio.mobile.modelo.HOSPITALES
 import pe.apio.mobile.modelo.LatLon
 import pe.apio.mobile.red.ApioApiClient
+import pe.apio.mobile.ui.EstadoRuta
+import pe.apio.mobile.ui.PanelInfo
 
 // Cerro Colorado, zona de origen del corredor (mismo punto que
 // ORIGEN_INICIAL en frontend/src/App.jsx).
@@ -32,36 +39,62 @@ fun App() {
     val scope = rememberCoroutineScope()
 
     var origen by remember { mutableStateOf(ORIGEN_INICIAL) }
-    var rutaPuntos by remember { mutableStateOf<List<LatLon>>(emptyList()) }
+    var ruta by remember { mutableStateOf<EstadoRuta?>(null) }
+    var cargando by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     MaterialTheme {
-        MapaOSM(
-            modifier = Modifier.fillMaxSize(),
-            origen = origen,
-            hospitales = HOSPITALES,
-            rutaPuntos = rutaPuntos,
-            onTapMapa = { nuevoOrigen ->
-                origen = nuevoOrigen
-                rutaPuntos = emptyList()
-            },
-            onTapHospital = { hospital ->
-                scope.launch {
-                    try {
-                        val resultado = apiClient.obtenerRuta(
-                            origenLat = origen.lat,
-                            origenLon = origen.lon,
-                            destLat = hospital.posicion.lat,
-                            destLon = hospital.posicion.lon,
-                        )
-                        // GeoJSON viene como [lon, lat]; osmdroid necesita [lat, lon].
-                        rutaPuntos = resultado.geometry.coordinates.map { LatLon(it[1], it[0]) }
-                    } catch (e: Exception) {
-                        // Manejo de error real (mensaje visible) llega en el
-                        // paso 7 -- por ahora no se cae la app.
-                        rutaPuntos = emptyList()
+        Box(modifier = Modifier.fillMaxSize()) {
+            MapaOSM(
+                modifier = Modifier.fillMaxSize(),
+                origen = origen,
+                hospitales = HOSPITALES,
+                rutaPuntos = ruta?.puntos ?: emptyList(),
+                onTapMapa = { nuevoOrigen ->
+                    origen = nuevoOrigen
+                    ruta = null
+                    error = null
+                },
+                onTapHospital = { hospital ->
+                    cargando = true
+                    error = null
+                    scope.launch {
+                        try {
+                            val resultado = apiClient.obtenerRuta(
+                                origenLat = origen.lat,
+                                origenLon = origen.lon,
+                                destLat = hospital.posicion.lat,
+                                destLon = hospital.posicion.lon,
+                            )
+                            // GeoJSON viene como [lon, lat]; osmdroid necesita [lat, lon].
+                            val puntos = resultado.geometry.coordinates.map { LatLon(it[1], it[0]) }
+                            ruta = EstadoRuta(
+                                destinoNombre = hospital.nombre,
+                                distanciaM = resultado.distanceM,
+                                tiempoS = resultado.timeS,
+                                tiempoSConTrafico = resultado.timeSConTrafico,
+                                privilegiosCruzados = resultado.privilegiosCruzados,
+                                puntos = puntos,
+                            )
+                        } catch (e: Exception) {
+                            error = e.message ?: "No se pudo calcular la ruta"
+                            ruta = null
+                        } finally {
+                            cargando = false
+                        }
                     }
-                }
-            },
-        )
+                },
+            )
+
+            PanelInfo(
+                cargando = cargando,
+                error = error,
+                ruta = ruta,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+            )
+        }
     }
 }
