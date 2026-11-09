@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema propio de APIO (ver CLAUDE.md, criterio "UI/UX Material 3"):
+         reemplaza el Theme.Material.Light.NoActionBar generico que traia la
+         plantilla. El theming real de Compose vive en
+         shared/.../ui/theme/Theme.kt (ApioTheme); esto solo cubre la
+         ventana nativa antes de que Compose se dibuje. -->
+    <style name="Theme.Apio" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
