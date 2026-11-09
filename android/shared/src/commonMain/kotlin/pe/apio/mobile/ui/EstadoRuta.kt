@@ -13,5 +13,6 @@ data class EstadoRuta(
     val tiempoS: Double,
     val tiempoSConTrafico: Double,
     val privilegiosCruzados: List<PrivilegioCruzado>,
+    val avenidasTraficoCruzadas: List<String>,
     val puntos: List<LatLon>,
 )

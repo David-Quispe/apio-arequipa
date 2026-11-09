@@ -48,6 +48,11 @@ class ApioApiClient(private val baseUrl: String) {
         client.get("$baseUrl/traffic").body()
     }
 
+    /** Libera el motor HTTP; lo llama el ViewModel en onCleared(). */
+    fun cerrar() {
+        client.close()
+    }
+
     private suspend fun <T> manejarErrores(bloque: suspend () -> T): T {
         try {
             return bloque()

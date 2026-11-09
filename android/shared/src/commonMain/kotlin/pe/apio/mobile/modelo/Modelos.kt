@@ -37,6 +37,7 @@ data class RouteResponse(
     @SerialName("time_s") val timeS: Double,
     @SerialName("time_s_con_trafico") val timeSConTrafico: Double,
     @SerialName("privilegios_cruzados") val privilegiosCruzados: List<PrivilegioCruzado> = emptyList(),
+    @SerialName("avenidas_trafico_cruzadas") val avenidasTraficoCruzadas: List<String> = emptyList(),
     val geometry: Geometry,
 )
 
