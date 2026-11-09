@@ -1,26 +1,101 @@
-This is a Kotlin Multiplatform project targeting Android.
+# APIO — cliente Android nativo
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+App Android nativa de APIO (enrutamiento para ambulancias en Arequipa), hecha en Kotlin Multiplatform +
+Compose Multiplatform. Es un cliente mas del mismo backend FastAPI que ya usan la PWA y la demo — no
+modifica el backend, GraphHopper ni el corredor de privilegios.
 
-### Running the apps
+Este README es el entregable del curso de Android con Jetpack Compose (TECSUP, IV ciclo). Para el contexto
+completo del proyecto APIO (backend, GraphHopper, PWA) ver el `README.md` de la raiz del repo.
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+## Como correrla
 
-- Android app: `./gradlew :androidApp:assembleDebug`
+1. Levantar el backend real: `./start.ps1` desde la raiz del repo (o `docker compose up` + GraphHopper segun
+   el README principal). La app **no tiene modo demo propio**: siempre habla con
+   `http://10.0.2.2:8000/api`, el alias que usa el emulador Android para llegar al `localhost` del host.
+2. Compilar e instalar:
+   ```bash
+   cd android
+   ./gradlew :androidApp:assembleDebug
+   adb install androidApp/build/outputs/apk/debug/androidApp-debug.apk
+   ```
+   O abrir `android/` en Android Studio y correr la configuracion `androidApp` sobre un emulador/dispositivo
+   con API 24+.
+3. Tests: `./gradlew :shared:testAndroidHostTest` (modelos, formateo, heuristica de riesgo).
 
-### Running tests
+## Arquitectura (MVVM)
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+```
+shared/src/commonMain/kotlin/pe/apio/mobile/
+├── modelo/      Modelos serializables 1:1 con /api/route y /api/traffic, y HOSPITALES
+├── red/         ApioApiClient (Ktor) — mismo contrato que la PWA
+├── datos/       ApioRepository (capa de datos) + RutaCacheStore (puerto de cache)
+├── ia/          EstimadorRiesgo — heuristica on-device de riesgo de demora
+├── viewmodel/   MapaViewModel + MapaUiState (StateFlow, flujo unidireccional)
+├── ui/          Paneles Compose, EstadoPantalla, ui/theme/ (ApioTheme)
+├── mapa/        expect fun MapaOSM(...) — implementacion real en androidMain
+└── App.kt       La V del MVVM: solo observa uiState y reenvia eventos
 
-- Android tests: `./gradlew :shared:testAndroidHostTest`
+androidApp/src/main/kotlin/pe/apio/mobile/
+├── MainActivity.kt   Unico lugar que sabe de Android "de verdad" (ver mas abajo)
+├── datos/            ApioSqliteHelper + SqliteRutaCacheStore (implementa RutaCacheStore)
+└── servicio/         SeguimientoUbicacionServicio (foreground service de GPS real)
+```
 
----
+`App()` (la Vista) nunca crea un `ApioRepository` con detalles de Android: recibe una fabrica
+(`crearRepositorio: () -> ApioRepository`) y, opcionalmente, un `Flow` de ubicacion real. Quien sabe de
+Android — permisos, `Service`, SQLite — es `MainActivity`. Esto es lo que permite que `shared` compile para
+mas plataformas despues sin arrastrar nada especifico de Android.
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+## Mapeo contra la rubrica del curso
+
+| # | Criterio | Donde esta |
+|---|---|---|
+| 1 | Control de versiones (Git, +20 commits) | Historial del repo completo; commits chicos y descriptivos |
+| 2 | Patron MVVM | `viewmodel/MapaViewModel.kt` + `datos/ApioRepository.kt`; `App.kt` solo observa `uiState` |
+| 3 | IA integrada con datos reales | `ia/EstimadorRiesgo.kt` — ver seccion "Criterio de IA" abajo |
+| 4 | Persistencia de datos (Room/Retrofit) | Red: Ktor (`red/ApioApiClient.kt`). Persistencia: `SQLiteOpenHelper` nativo (`androidApp/datos/`) — ver nota sobre Room abajo |
+| 5 | Servicios (Service de Android) | `servicio/SeguimientoUbicacionServicio.kt` — foreground service de ubicacion real |
+| 6 | UI/UX con Material 3 | `ui/theme/Theme.kt` (`ApioTheme`, paleta propia, variante oscura) + `AndroidManifest.xml` con `Theme.Apio` propio |
+| 7 | App funcional sin errores criticos | `EstadoPantalla.Error` con reintento; sondeo y auto-refresh silenciosos (no tiran la UI abajo) |
+| 8 | Documentacion + video (3-5 min) | Este README + `GUION_VIDEO.md` |
+
+### Criterio de IA: heuristica on-device de riesgo de demora
+
+El backend ya ajusta el ETA con trafico real (TomTom, ver `backend/app/services/traffic.py`), pero eso no
+es un componente de IA *en la app*. Para cumplir el criterio con datos reales (no un mock), `ia/EstimadorRiesgo.kt`
+implementa una heuristica propia — un arbol de decision ponderado, no una caja negra — que combina 3 señales
+que el backend ya devuelve con datos de trafico real:
+
+- cuanto se alarga el ETA por trafico (peso 0.5),
+- cuantas de las avenidas que cruza la ruta estan en nivel "alta" de trafico (peso 0.3),
+- que tan exigentes son los privilegios cruzados que necesita la ambulancia — contraflujo, carril
+  exclusivo, cruce en rojo — (peso 0.2).
+
+El resultado es un nivel bajo/medio/alto con un mensaje, mostrado como un banner de color en el panel de
+info cuando hay una ruta activa. Se recalcula solo, cada vez que llega trafico nuevo (cada 25s) o se traza
+una ruta nueva.
+
+### Nota sobre "Datos (Room/Retrofit)": por que no hay Room literal
+
+Se intento usar Room de verdad antes que nada. Room necesita un procesador de anotaciones (KSP o kapt), y
+ninguno de los dos es viable con el toolchain exacto de este proyecto (Kotlin 2.4.10, AGP 9.0.1):
+
+- **KSP** no tiene ninguna build publicada para Kotlin 2.4.10 (verificado en Maven Central — la ultima
+  version del plugin es 2.3.13).
+- **kapt** es incompatible con el "built-in Kotlin" de AGP 9 que usa `:androidApp` (el modulo ya no aplica
+  el plugin clasico de Kotlin, solo `com.android.application` + el compilador de Compose).
+
+Bajar la version de Kotlin del proyecto entero para habilitar KSP arriesgaba romper lo que ya compilaba
+(Compose Multiplatform 1.11.1 y AGP 9.0.1 estan acoplados a esta version de Kotlin). En su lugar,
+`androidApp/datos/ApioSqliteHelper.kt` + `SqliteRutaCacheStore.kt` reproducen a mano la misma arquitectura
+de Room — Entity/DAO/Database — sobre `SQLiteOpenHelper` (el mismo motor SQLite que usa Room por debajo):
+cachea la lista de hospitales y la ultima ruta calculada, y `ApioRepository` la usa como respaldo cuando la
+red falla. Documentado tambien en `CLAUDE.md` para que quede clara la decision y su justificacion tecnica.
+
+### Servicio en primer plano + ubicacion real
+
+Por defecto, el origen de la ambulancia se mueve tocando el mapa (util para grabar la demo sin depender del
+GPS del emulador). El boton **"GPS real"** prende `SeguimientoUbicacionServicio`: un foreground service
+(`foregroundServiceType="location"`) que pide el permiso de ubicacion en tiempo de ejecucion y, una vez
+concedido, actualiza el origen con la ubicacion real del dispositivo cada ~3s/5m mientras la notificacion
+persistente esta visible.
