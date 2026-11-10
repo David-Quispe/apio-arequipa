@@ -22,9 +22,10 @@ usa la version web del proyecto — misma logica de privilegios de transito, mis
    con trafico, chips de privilegio cruzado).
 3. Esperar o forzar un refresco de trafico (sondeo cada 25s) → senalar que el ETA se actualiza solo, sin
    recalcular la ruta completa ("se actualiza solo" con el punto verde pulsante).
-4. Senalar el **banner de riesgo** (IA): explicar que no es el ETA del backend, es una heuristica propia de
-   la app que combina 3 señales (demora relativa, avenidas en trafico alto, privilegios exigidos) en un
-   nivel bajo/medio/alto.
+4. Senalar el **banner de riesgo** y debajo la tarjeta **"✨ Recomendacion IA"**: explicar que la app manda
+   los datos reales de la ruta (ETA con trafico de TomTom, avenidas congestionadas, privilegios y el nivel de
+   riesgo de la heuristica propia) al backend, que le pregunta a Google Gemini y devuelve una recomendacion
+   en lenguaje natural para el conductor. Mencionar que la API key esta en el backend, no en la app.
 5. Tocar el boton **"GPS real"** → aceptar el permiso de ubicacion → mostrar la notificacion persistente del
    foreground service y como el origen ahora sigue la ubicacion real (o la del emulador, si se simula GPS
    desde Android Studio).
@@ -43,7 +44,8 @@ usa la version web del proyecto — misma logica de privilegios de transito, mis
    profesor pregunta.)
 4. `servicio/SeguimientoUbicacionServicio.kt` — foreground service + permiso de ubicacion en runtime.
 5. `ui/theme/Theme.kt` — tema Material 3 propio (`ApioTheme`), con variante oscura.
-6. `ia/EstimadorRiesgo.kt` — la funcion `evaluarRiesgo`, explicando los 3 pesos.
+6. `backend/app/services/ia.py` — el prompt con datos reales que se manda a Gemini, y `ia/EstimadorRiesgo.kt`
+   con los 3 pesos de la heuristica que alimenta ese prompt.
 
 ## 4. Cierre (15-20s)
 

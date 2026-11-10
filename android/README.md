@@ -52,14 +52,30 @@ mas plataformas despues sin arrastrar nada especifico de Android.
 |---|---|---|
 | 1 | Control de versiones (Git, +20 commits) | Historial del repo completo; commits chicos y descriptivos |
 | 2 | Patron MVVM | `viewmodel/MapaViewModel.kt` + `datos/ApioRepository.kt`; `App.kt` solo observa `uiState` |
-| 3 | IA integrada con datos reales | `ia/EstimadorRiesgo.kt` — ver seccion "Criterio de IA" abajo |
+| 3 | IA integrada con datos reales | LLM Google Gemini via `POST /api/ia/recomendacion` (backend) + `ia/EstimadorRiesgo.kt` — ver seccion "Criterio de IA" abajo |
 | 4 | Persistencia de datos (Room/Retrofit) | Red: Ktor (`red/ApioApiClient.kt`). Persistencia: `SQLiteOpenHelper` nativo (`androidApp/datos/`) — ver nota sobre Room abajo |
 | 5 | Servicios (Service de Android) | `servicio/SeguimientoUbicacionServicio.kt` — foreground service de ubicacion real |
 | 6 | UI/UX con Material 3 | `ui/theme/Theme.kt` (`ApioTheme`, paleta propia, variante oscura) + `AndroidManifest.xml` con `Theme.Apio` propio |
 | 7 | App funcional sin errores criticos | `EstadoPantalla.Error` con reintento; sondeo y auto-refresh silenciosos (no tiran la UI abajo) |
 | 8 | Documentacion + video (3-5 min) | Este README + `GUION_VIDEO.md` |
 
-### Criterio de IA: heuristica on-device de riesgo de demora
+### Criterio de IA: recomendacion con LLM (Gemini) + heuristica de riesgo
+
+La IA tiene dos capas que trabajan juntas:
+
+1. **LLM real (Google Gemini, free tier).** Cuando hay una ruta activa, la app manda al backend
+   (`POST /api/ia/recomendacion`, ver `backend/app/services/ia.py`) los datos reales de esa ruta: ETA con y
+   sin trafico de TomTom, avenidas congestionadas que cruza, privilegios de transito disponibles y el nivel
+   de riesgo de la heuristica. El backend arma el prompt, llama a Gemini y devuelve una recomendacion corta
+   para el conductor, que se muestra en la tarjeta "✨ Recomendacion IA" del panel.
+   - La API key vive solo en `backend/.env` (`GEMINI_API_KEY`), nunca dentro del APK.
+   - Para cuidar la cuota gratuita, la app solo vuelve a pedir la recomendacion cuando cambia el destino o
+     el nivel de riesgo, y el backend reusa la misma respuesta 3 minutos para la misma situacion.
+   - Si no hay key, no hay red o se agoto la cuota, el backend responde 503 y la app se queda con el
+     mensaje de la heuristica local: la IA externa nunca tumba la pantalla.
+2. **Heuristica on-device** (la señal de entrada del LLM y su respaldo offline), descrita abajo.
+
+#### Heuristica on-device de riesgo de demora
 
 El backend ya ajusta el ETA con trafico real (TomTom, ver `backend/app/services/traffic.py`), pero eso no
 es un componente de IA *en la app*. Para cumplir el criterio con datos reales (no un mock), `ia/EstimadorRiesgo.kt`

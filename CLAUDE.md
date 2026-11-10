@@ -14,7 +14,7 @@ un cliente más del mismo FastAPI.
 |---|---|---|
 | Git (+20 commits) | Cumple | Más de 20 commits; seguir con commits chicos y descriptivos |
 | MVVM | Hecho y **compila** (`:androidApp:assembleDebug` OK) | `viewmodel/MapaViewModel.kt` + `datos/ApioRepository.kt`; `App.kt` solo observa `uiState` |
-| IA integrada con datos reales | Hecho | Heuristica propia on-device (`ia/EstimadorRiesgo.kt`): pondera el delta ETA sin/con trafico real (TomTom), las avenidas en nivel "alta" que cruza la ruta y el promedio de privilegios cruzados, en un nivel bajo/medio/alto mostrado como banner en `PanelInfo` |
+| IA integrada con datos reales | Hecho, con LLM real **y** heuristica | Dos capas: (1) `backend/app/services/ia.py` llama a Google Gemini (free tier, modelo `gemini-flash-lite-latest`) con el prompt armado desde ETA con/sin trafico real, avenidas en "alta" y privilegios cruzados; `POST /api/ia/recomendacion` devuelve el texto, cacheado 3 min por (destino, riesgo, ETA redondeado); se muestra en la tarjeta "✨ Recomendacion IA" de `PanelInfo`. (2) Heuristica propia on-device (`ia/EstimadorRiesgo.kt`): pondera el mismo delta de ETA, las avenidas en "alta" y el promedio de privilegios cruzados en un nivel bajo/medio/alto (`BannerRiesgo`) -- es la entrada que recibe el LLM *y* el respaldo que queda en pantalla si Gemini falla (sin key, sin red, cuota agotada): la app nunca muestra un error por eso, solo oculta la tarjeta |
 | Datos (Room/Retrofit) | Hecho, **sin Room literal** (ver nota) | Red con Ktor (`ApioApiClient`). Cache de hospitales y ultima ruta con `SQLiteOpenHelper` nativo (`androidApp/datos/ApioSqliteHelper.kt` + `SqliteRutaCacheStore.kt`), inyectado en `ApioRepository` como fallback cuando falla la red |
 | Servicios | Hecho | `SeguimientoUbicacionServicio` (foreground service, `foregroundServiceType="location"`) + permiso de ubicacion en runtime; boton "GPS real" en pantalla lo prende/apaga |
 | UI/UX Material 3 | Hecho | `ui/theme/Theme.kt` (`ApioTheme`, paleta propia con variante oscura) reemplaza el `MaterialTheme { }` por defecto; manifest ya no usa `Theme.Material.Light` sino `@style/Theme.Apio` (`androidApp/res/values[-night]/themes.xml`) |
@@ -44,9 +44,23 @@ hoy funciona) o mostrar esta decision como parte del criterio de "Datos" (justif
 2. ~~Datos (cache local + ultima ruta)~~ Hecho con SQLiteOpenHelper (ver nota arriba).
 3. ~~Tema Material 3 propio~~ Hecho.
 4. ~~Servicio en primer plano + permiso de ubicación~~ Hecho.
-5. ~~Definir e integrar el criterio de IA~~ Hecho (heuristica on-device).
+5. ~~Definir e integrar el criterio de IA~~ Hecho: heuristica on-device + LLM real (Gemini) en el backend,
+   endpoint probado en vivo (ver nota de Gemini abajo).
 6. Probar en dispositivo/emulador real con el backend corriendo (`start.ps1`), grabar el video (3-5 min,
    guion en GUION_VIDEO.md) y terminar `android/README.md`.
+
+### Nota sobre la API key de Gemini (para no repetir el mismo error)
+
+`GEMINI_API_KEY` vive solo en `backend/.env` (gitignorado) y `backend/.env.example` SIEMPRE debe quedar con
+`GEMINI_API_KEY=` vacio -- es un archivo versionado, poner ahi una key real la deja en el historial de git
+para siempre. Una key real de Google AI Studio (https://aistudio.google.com/apikey, boton "Create API key")
+es una sola cadena alfanumerica que empieza con `AIzaSy...` (~39 caracteres). Si lo que se copio empieza con
+`AQ.` y tiene puntos/guiones, es un token de otro tipo (OAuth/sesion) y Gemini responde 401 con
+`ACCESS_TOKEN_TYPE_UNSUPPORTED` -- hay que volver a la pagina y copiar el boton de la key, no otro campo.
+El modelo default (`gemini_model` en `config.py` y `.env.example`) es `gemini-flash-lite-latest`: se probo que
+`gemini-flash-latest` (el modelo "normal", no "lite") es valido pero devuelve 503 "high demand" seguido en el
+free tier; el "lite" respondio 200 de forma consistente y alcanza de sobra para una recomendacion de 2
+oraciones.
 
 ## Arquitectura de la app Android
 
@@ -71,7 +85,8 @@ hoy funciona) o mostrar esta decision como parte del criterio de "Datos" (justif
 
 - Idioma: español, tanto en la conversación como en comentarios y mensajes de commit.
 - Estilo del repo: comentarios en español sin tildes dentro del código, mensajes de commit descriptivos
-  (por ejemplo "Paso 9 del cliente Android: auto-refresh del ETA de la ruta activa").
+  con prefijo de Conventional Commits (`feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`)
+  seguido del resumen en español (por ejemplo "feat: auto-refresh del ETA de la ruta activa").
 - David prefiere resultados listos para usar (código completo, archivos ya editados) en vez de guías paso a paso.
 - Los entregables del curso deben llevar cambios propios que se vean hechos por él; no copiar codelabs tal cual.
 - Backend, GraphHopper y PWA no se tocan para esta entrega. Probar la app con el backend corriendo
