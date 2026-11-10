@@ -28,6 +28,10 @@ Thumbs.db
 *.graphhopper/
 backend/cache/
 
+# CSV originales de RENIPRESS / MINSA (varios MB). Lo que se versiona es el
+# JSON chico que genera scripts/importar_establecimientos.py
+backend/fuentes/*.csv
+
 # GraphHopper (jar pesado, datos de import y cache del grafo, logs)
 routing/*.jar
 routing/data/
