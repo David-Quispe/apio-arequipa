@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     graphhopper_url: str = "http://localhost:8989"
     tomtom_api_key: str = ""
 
+    # IA (Google Gemini, free tier de Google AI Studio)
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-flash-lite-latest"
+
     cors_origins: list[str] = ["http://localhost:5173"]
 
     class Config:
