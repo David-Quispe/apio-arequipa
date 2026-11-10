@@ -36,7 +36,16 @@ data class MapaUiState(
     val estado: EstadoPantalla = EstadoPantalla.Vacio,
     val trafico: List<AvenidaTrafico> = emptyList(),
     val riesgo: EvaluacionRiesgo? = null,
+    val recomendacion: EstadoRecomendacion? = null,
 )
+
+/** Estado de la recomendacion del LLM (Gemini, via backend). Si no esta
+ * disponible, el panel se queda solo con el mensaje de la heuristica local. */
+sealed interface EstadoRecomendacion {
+    data object Cargando : EstadoRecomendacion
+    data class Lista(val texto: String) : EstadoRecomendacion
+    data object NoDisponible : EstadoRecomendacion
+}
 
 /** Recalcula el riesgo IA (ver pe.apio.mobile.ia.EstimadorRiesgo) a partir
  * del estado actual: solo tiene sentido con una ruta ya calculada, y debe
@@ -63,6 +72,12 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
     // mueve el origen, para que una respuesta vieja no pise la nueva.
     private var rutaJob: Job? = null
 
+    // Pedido al LLM en curso y la situacion (destino + nivel de riesgo) para
+    // la que se pidio. Solo se vuelve a llamar a la IA cuando esa situacion
+    // cambia, no en cada sondeo de 25 s (cuida la cuota del free tier).
+    private var iaJob: Job? = null
+    private var claveRecomendacion: String? = null
+
     init {
         viewModelScope.launch {
             try {
@@ -78,12 +93,14 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
 
     fun seleccionarHospital(hospital: Hospital) {
         rutaJob?.cancel()
-        _uiState.update { it.copy(estado = EstadoPantalla.Cargando(hospital)) }
+        reiniciarRecomendacion()
+        _uiState.update { it.copy(estado = EstadoPantalla.Cargando(hospital), recomendacion = null) }
         val origen = _uiState.value.origen
         rutaJob = viewModelScope.launch {
             try {
                 val ruta = repositorio.obtenerRuta(origen, hospital)
                 _uiState.update { it.copy(estado = EstadoPantalla.Exito(ruta)).conRiesgoRecalculado() }
+                revisarRecomendacion()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -101,12 +118,49 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
 
     fun moverOrigen(nuevoOrigen: LatLon) {
         rutaJob?.cancel()
-        _uiState.update { it.copy(origen = nuevoOrigen, estado = EstadoPantalla.Vacio, riesgo = null) }
+        reiniciarRecomendacion()
+        _uiState.update {
+            it.copy(origen = nuevoOrigen, estado = EstadoPantalla.Vacio, riesgo = null, recomendacion = null)
+        }
     }
 
     fun cerrarPanel() {
         rutaJob?.cancel()
-        _uiState.update { it.copy(estado = EstadoPantalla.Vacio, riesgo = null) }
+        reiniciarRecomendacion()
+        _uiState.update { it.copy(estado = EstadoPantalla.Vacio, riesgo = null, recomendacion = null) }
+    }
+
+    // ---- Recomendacion del LLM ----
+
+    private fun reiniciarRecomendacion() {
+        iaJob?.cancel()
+        claveRecomendacion = null
+    }
+
+    /** Pide una recomendacion nueva al LLM solo si hay ruta + riesgo y la
+     * situacion cambio desde la ultima vez (otro destino u otro nivel). */
+    private fun revisarRecomendacion() {
+        val actual = _uiState.value
+        val ruta = (actual.estado as? EstadoPantalla.Exito)?.ruta ?: return
+        val riesgo = actual.riesgo ?: return
+        val clave = "${ruta.destino.nombre}|${riesgo.nivel}"
+        if (clave == claveRecomendacion) return
+        claveRecomendacion = clave
+
+        iaJob?.cancel()
+        _uiState.update { it.copy(recomendacion = EstadoRecomendacion.Cargando) }
+        iaJob = viewModelScope.launch {
+            val nuevo = try {
+                EstadoRecomendacion.Lista(repositorio.obtenerRecomendacionIa(ruta, actual.trafico, riesgo))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // sin key, sin red o cuota agotada: la heuristica local sigue
+                // en pantalla, asi que no se muestra ningun error
+                EstadoRecomendacion.NoDisponible
+            }
+            _uiState.update { it.copy(recomendacion = nuevo) }
+        }
     }
 
     // ---- Sondeo de trafico + auto-refresh del ETA ----
@@ -117,6 +171,7 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
                 try {
                     val trafico = repositorio.obtenerTrafico()
                     _uiState.update { it.copy(trafico = trafico).conRiesgoRecalculado() }
+                    revisarRecomendacion()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -162,6 +217,7 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
                     actual
                 }
             }
+            revisarRecomendacion()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

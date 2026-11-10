@@ -7,9 +7,15 @@ import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import pe.apio.mobile.modelo.ErrorResponse
+import pe.apio.mobile.modelo.RecomendacionRequest
+import pe.apio.mobile.modelo.RecomendacionResponse
 import pe.apio.mobile.modelo.RouteResponse
 import pe.apio.mobile.modelo.TrafficResponse
 
@@ -46,6 +52,15 @@ class ApioApiClient(private val baseUrl: String) {
 
     suspend fun obtenerTrafico(): TrafficResponse = manejarErrores {
         client.get("$baseUrl/traffic").body()
+    }
+
+    /** Recomendacion del LLM (Gemini) generada en el backend: la API key
+     * nunca viaja dentro del APK. Un 503 significa "IA no disponible". */
+    suspend fun obtenerRecomendacionIa(datos: RecomendacionRequest): RecomendacionResponse = manejarErrores {
+        client.post("$baseUrl/ia/recomendacion") {
+            contentType(ContentType.Application.Json)
+            setBody(datos)
+        }.body()
     }
 
     /** Libera el motor HTTP; lo llama el ViewModel en onCleared(). */

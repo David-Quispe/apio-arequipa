@@ -59,3 +59,36 @@ data class TrafficResponse(
 data class ErrorResponse(
     val detail: String,
 )
+
+// ---- /api/ia/recomendacion (backend/app/api/routes/ia.py) ----
+
+@Serializable
+data class AvenidaNivel(
+    val avenida: String,
+    val nivel: String,
+)
+
+@Serializable
+data class PrivilegioRuta(
+    val avenida: String,
+    val tipo: String? = null,
+    val score: Double,
+)
+
+@Serializable
+data class RecomendacionRequest(
+    val destino: String,
+    @SerialName("distancia_m") val distanciaM: Double,
+    @SerialName("tiempo_s") val tiempoS: Double,
+    @SerialName("tiempo_s_con_trafico") val tiempoSConTrafico: Double,
+    @SerialName("avenidas_trafico") val avenidasTrafico: List<AvenidaNivel>,
+    val privilegios: List<PrivilegioRuta>,
+    @SerialName("riesgo_nivel") val riesgoNivel: String,
+    @SerialName("riesgo_puntaje") val riesgoPuntaje: Double,
+)
+
+@Serializable
+data class RecomendacionResponse(
+    val texto: String,
+    val modelo: String? = null,
+)

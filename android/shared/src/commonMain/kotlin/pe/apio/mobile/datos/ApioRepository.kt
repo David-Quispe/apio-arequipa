@@ -1,8 +1,12 @@
 package pe.apio.mobile.datos
 
+import pe.apio.mobile.ia.EvaluacionRiesgo
+import pe.apio.mobile.modelo.AvenidaNivel
 import pe.apio.mobile.modelo.AvenidaTrafico
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
+import pe.apio.mobile.modelo.PrivilegioRuta
+import pe.apio.mobile.modelo.RecomendacionRequest
 import pe.apio.mobile.red.ApioApiClient
 import pe.apio.mobile.red.ApioApiException
 import pe.apio.mobile.ui.EstadoRuta
@@ -54,6 +58,19 @@ class ApioRepository(
 
     suspend fun obtenerTrafico(): List<AvenidaTrafico> = api.obtenerTrafico().avenidas
 
+    /** Pide al backend la recomendacion en lenguaje natural del LLM para la
+     * ruta actual. Le pasa solo datos reales que la app ya tiene: la ruta
+     * del backend, el trafico de TomTom de las avenidas que cruza y el
+     * resultado de la heuristica local [EvaluacionRiesgo]. */
+    suspend fun obtenerRecomendacionIa(
+        ruta: EstadoRuta,
+        trafico: List<AvenidaTrafico>,
+        riesgo: EvaluacionRiesgo,
+    ): String {
+        val datos = construirRecomendacionRequest(ruta, trafico, riesgo)
+        return api.obtenerRecomendacionIa(datos).texto
+    }
+
     /** Escribe el listado de hospitales en el cache local. Hoy [Hospital]
      * sale de la constante hardcodeada HOSPITALES (no hay endpoint de red
      * todavia), pero dejar esto conectado hace trivial el dia que haya uno. */
@@ -62,4 +79,29 @@ class ApioRepository(
     }
 
     fun cerrar() = api.cerrar()
+}
+
+/** Arma el pedido para /api/ia/recomendacion a partir de datos que la app ya
+ * tiene (ruta + trafico + heuristica local). Separado de la clase para poder
+ * probarlo en commonTest sin pasar por Ktor ni por el backend real. */
+internal fun construirRecomendacionRequest(
+    ruta: EstadoRuta,
+    trafico: List<AvenidaTrafico>,
+    riesgo: EvaluacionRiesgo,
+): RecomendacionRequest {
+    val nivelPorAvenida = trafico.associate { it.avenida to it.nivel }
+    return RecomendacionRequest(
+        destino = ruta.destino.nombre,
+        distanciaM = ruta.distanciaM,
+        tiempoS = ruta.tiempoS,
+        tiempoSConTrafico = ruta.tiempoSConTrafico,
+        avenidasTrafico = ruta.avenidasTraficoCruzadas.map { avenida ->
+            AvenidaNivel(avenida, nivelPorAvenida[avenida] ?: "desconocido")
+        },
+        privilegios = ruta.privilegiosCruzados.map { p ->
+            PrivilegioRuta(p.avenida, p.tipoPrincipal, p.tipoPrincipalScore ?: p.general)
+        },
+        riesgoNivel = riesgo.nivel.name,
+        riesgoPuntaje = riesgo.puntaje,
+    )
 }

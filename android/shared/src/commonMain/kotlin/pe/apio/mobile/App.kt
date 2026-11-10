@@ -76,6 +76,7 @@ fun App(
             PanelInfo(
                 estado = uiState.estado,
                 riesgo = uiState.riesgo,
+                recomendacion = uiState.recomendacion,
                 onDismiss = viewModel::cerrarPanel,
                 onRetry = viewModel::seleccionarHospital,
                 modifier = Modifier

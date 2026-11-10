@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,6 +41,7 @@ import pe.apio.mobile.ia.EvaluacionRiesgo
 import pe.apio.mobile.ia.NivelRiesgo
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.PrivilegioCruzado
+import pe.apio.mobile.viewmodel.EstadoRecomendacion
 
 // Ambar oscuro para alertas -- deliberadamente distinto del rojo de marca
 // (#e11d48, usado por la ruta) y del ambar de trafico "medio" (#d97706), para
@@ -60,13 +62,14 @@ fun PanelInfo(
     onDismiss: () -> Unit,
     onRetry: (Hospital) -> Unit,
     modifier: Modifier = Modifier,
+    recomendacion: EstadoRecomendacion? = null,
 ) {
     PanelFlotante(modifier = modifier) {
         when (estado) {
             is EstadoPantalla.Vacio -> VacioCard()
             is EstadoPantalla.Cargando -> CargandoCard(estado)
             is EstadoPantalla.Error -> ErrorCard(estado, onDismiss, onRetry)
-            is EstadoPantalla.Exito -> ExitoCard(estado.ruta, riesgo, onDismiss)
+            is EstadoPantalla.Exito -> ExitoCard(estado.ruta, riesgo, recomendacion, onDismiss)
         }
     }
 }
@@ -121,7 +124,12 @@ private fun ErrorCard(
 }
 
 @Composable
-private fun ExitoCard(ruta: EstadoRuta, riesgo: EvaluacionRiesgo?, onDismiss: () -> Unit) {
+private fun ExitoCard(
+    ruta: EstadoRuta,
+    riesgo: EvaluacionRiesgo?,
+    recomendacion: EstadoRecomendacion?,
+    onDismiss: () -> Unit,
+) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
             ruta.destino.nombre,
@@ -162,8 +170,38 @@ private fun ExitoCard(ruta: EstadoRuta, riesgo: EvaluacionRiesgo?, onDismiss: ()
     if (riesgo != null) {
         BannerRiesgo(riesgo)
     }
+    if (recomendacion != null && recomendacion !is EstadoRecomendacion.NoDisponible) {
+        TarjetaRecomendacionIa(recomendacion)
+    }
     Spacer(Modifier.height(10.dp))
     IndicadorAutoActualiza()
+}
+
+/** Recomendacion en lenguaje natural del LLM (Gemini, via backend). Si no
+ * esta disponible no se dibuja: el banner de la heuristica ya cubre ese caso. */
+@Composable
+private fun TarjetaRecomendacionIa(recomendacion: EstadoRecomendacion) {
+    val colorIa = Color(0xFF4F46E5)
+    Spacer(Modifier.height(8.dp))
+    Surface(shape = RoundedCornerShape(10.dp), color = colorIa.copy(alpha = 0.08f)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text("✨ Recomendación IA", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = colorIa)
+            Spacer(Modifier.height(4.dp))
+            when (recomendacion) {
+                is EstadoRecomendacion.Cargando -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = colorIa)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Analizando la ruta…", fontSize = 12.sp, color = Color.Gray)
+                }
+                is EstadoRecomendacion.Lista -> Text(
+                    recomendacion.texto,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                is EstadoRecomendacion.NoDisponible -> Unit
+            }
+        }
+    }
 }
 
 /** Recomendacion de la heuristica IA (ver pe.apio.mobile.ia.EstimadorRiesgo)
