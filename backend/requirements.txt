@@ -4,6 +4,7 @@ pydantic-settings
 sqlalchemy
 geoalchemy2
 psycopg2-binary
+psycopg[binary]
 osmnx
 networkx
 httpx

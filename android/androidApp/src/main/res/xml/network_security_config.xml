@@ -1,11 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Permite HTTP sin cifrar solo hacia 10.0.2.2 (el alias del emulador
-  Android hacia el localhost de la maquina host, donde corre el backend
-  de desarrollo). El resto del trafico sigue exigiendo HTTPS.
+  - 10.0.2.2: HTTP sin cifrar solo hacia el alias del emulador Android al
+    localhost de la maquina host (backend de desarrollo).
+  - apio-arequipa.duckdns.org: el servidor de Azure usa la jerarquia nueva
+    de Let's Encrypt (Root YR). Algunos Android no logran armar la cadena
+    hasta ISRG Root X1, asi que ademas de las CA del sistema confiamos en
+    la cadena intermedia de Let's Encrypt incluida en res/raw/apio_chain.pem.
+  El resto del trafico sigue exigiendo HTTPS con las CA del sistema.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+    <domain-config>
+        <domain includeSubdomains="false">apio-arequipa.duckdns.org</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/apio_chain" />
+        </trust-anchors>
     </domain-config>
 </network-security-config>
