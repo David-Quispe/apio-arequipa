@@ -31,12 +31,19 @@ import pe.apio.mobile.ui.pantallas.PantallaHospitales
 import pe.apio.mobile.ui.pantallas.PantallaMapa
 import pe.apio.mobile.ui.pantallas.PantallaPerfil
 import pe.apio.mobile.ui.theme.ApioTheme
+import pe.apio.mobile.viewmodel.HistorialViewModel
+import pe.apio.mobile.viewmodel.HospitalesViewModel
 import pe.apio.mobile.viewmodel.MapaViewModel
+import pe.apio.mobile.viewmodel.RepositorioHolder
 
-// 10.0.2.2 es el alias del emulador Android hacia el localhost de la
-// maquina host, donde corre el backend real (ver AndroidManifest.xml /
-// network_security_config.xml para el permiso de trafico sin cifrar).
-private const val API_BASE_URL = "http://10.0.2.2:8000/api"
+// Backend desplegado en la VM de Azure (NGINX + HTTPS de Let's Encrypt,
+// dominio DuckDNS): funciona desde cualquier celular con datos o Wi-Fi.
+private const val API_BASE_URL = "https://apio-arequipa.duckdns.org/api"
+
+// Para desarrollo con el backend en tu PC y el emulador, cambia la de arriba
+// por esta (10.0.2.2 es el alias del emulador hacia el localhost del host;
+// ver network_security_config.xml para el permiso de trafico sin cifrar):
+// private const val API_BASE_URL = "http://10.0.2.2:8000/api"
 
 /** Pestanas de la barra de navegacion inferior del diseno de Figma. */
 private enum class Pestana(val titulo: String) {
@@ -54,14 +61,14 @@ private fun Pestana.icono(): ImageVector = when (this) {
 }
 
 /**
- * La V del MVVM: solo dibuja [MapaViewModel.uiState] y le avisa al
- * ViewModel lo que hace el usuario. Todas las pantallas comparten el MISMO
- * ViewModel y el mismo estado: cambiar de pestana no recalcula nada. El
+ * La V del MVVM: dibuja el estado de [MapaViewModel], [HospitalesViewModel]
+ * e [HistorialViewModel] y les avisa lo que hace el usuario. Los ViewModels
+ * viven mientras la Activity, asi que cambiar de pestana no recalcula nada. El
  * unico estado propio de la vista es de interfaz pura (pestana elegida y
  * tema oscuro), que no es logica de la app.
  *
- * [crearRepositorio] lo inyecta MainActivity (con el cache SQLite ya
- * conectado); por defecto crea uno sin cache, solo para el @Preview.
+ * [crearRepositorio] lo inyecta MainActivity (con Retrofit y Room ya
+ * conectados); por defecto crea uno sin cache, solo para el @Preview.
  * [ubicacionReal] es la ubicacion GPS que entrega SeguimientoUbicacionServicio
  * cuando esta prendido el seguimiento real; null mientras esta apagado.
  */
@@ -73,8 +80,15 @@ fun App(
     ubicacionActiva: Boolean = false,
     onToggleUbicacion: () -> Unit = {},
 ) {
-    val viewModel = viewModel { MapaViewModel(crearRepositorio()) }
+    // Un repositorio compartido y un ViewModel por responsabilidad (MVVM):
+    // Mapa (ruta, trafico, IA, GPS), Hospitales (lista) e Historial (Room).
+    val repositorio = viewModel { RepositorioHolder(crearRepositorio()) }.repositorio
+    val viewModel = viewModel { MapaViewModel(repositorio) }
+    val hospitalesViewModel = viewModel { HospitalesViewModel(repositorio) }
+    val historialViewModel = viewModel { HistorialViewModel(repositorio) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val hospitalesState by hospitalesViewModel.uiState.collectAsStateWithLifecycle()
+    val historialState by historialViewModel.uiState.collectAsStateWithLifecycle()
 
     var pestana by rememberSaveable { mutableStateOf(Pestana.MAPA) }
     val temaSistemaOscuro = isSystemInDarkTheme()
@@ -82,9 +96,14 @@ fun App(
     var temaOscuroElegido by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val temaOscuro = temaOscuroElegido ?: temaSistemaOscuro
 
+    // al entrar a Historial o Perfil se leen los ultimos traslados de Room
+    LaunchedEffect(pestana) {
+        if (pestana == Pestana.HISTORIAL || pestana == Pestana.PERFIL) historialViewModel.recargar()
+    }
+
     if (ubicacionReal != null) {
         LaunchedEffect(ubicacionReal) {
-            ubicacionReal.collect { ubicacion -> ubicacion?.let(viewModel::moverOrigen) }
+            ubicacionReal.collect { ubicacion -> ubicacion?.let(viewModel::actualizarUbicacionReal) }
         }
     }
 
@@ -110,17 +129,22 @@ fun App(
             when (pestana) {
                 Pestana.MAPA -> PantallaMapa(
                     uiState = uiState,
+                    hospitales = hospitalesState.hospitales,
                     seguimientoActivo = ubicacionActiva,
                     onToggleSeguimiento = onToggleUbicacion,
                     onTapMapa = viewModel::moverOrigen,
                     onTapHospital = viewModel::seleccionarHospital,
                     onCerrarRuta = viewModel::cerrarPanel,
-                    onReintentar = viewModel::seleccionarHospital,
+                    onReintentar = { hospital ->
+                        // si la lista de hospitales no vino del servidor, se pide de nuevo
+                        hospitalesViewModel.recargarSiHaceFalta()
+                        viewModel.seleccionarHospital(hospital)
+                    },
                     onBuscar = { pestana = Pestana.HOSPITALES },
                     modifier = contenido,
                 )
                 Pestana.HOSPITALES -> PantallaHospitales(
-                    hospitales = uiState.hospitales,
+                    hospitales = hospitalesState.hospitales,
                     origen = uiState.origen,
                     estado = uiState.estado,
                     onElegir = { hospital ->
@@ -130,12 +154,12 @@ fun App(
                     modifier = contenido.statusBarsPadding(),
                 )
                 Pestana.HISTORIAL -> PantallaHistorial(
-                    historial = uiState.historial,
+                    historial = historialState.traslados,
                     onNuevaEmergencia = { pestana = Pestana.HOSPITALES },
                     modifier = contenido.statusBarsPadding(),
                 )
                 Pestana.PERFIL -> PantallaPerfil(
-                    historial = uiState.historial,
+                    historial = historialState.traslados,
                     temaOscuro = temaOscuro,
                     onCambiarTemaOscuro = { temaOscuroElegido = it },
                     seguimientoActivo = ubicacionActiva,

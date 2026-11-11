@@ -10,7 +10,7 @@ import pe.apio.mobile.modelo.LatLon
 import pe.apio.mobile.modelo.PrivilegioRuta
 import pe.apio.mobile.modelo.RecomendacionRequest
 import pe.apio.mobile.modelo.Traslado
-import pe.apio.mobile.red.ApioApiClient
+import pe.apio.mobile.red.ApioApi
 import pe.apio.mobile.red.ApioApiException
 import pe.apio.mobile.ui.EstadoRuta
 import kotlin.time.Clock
@@ -18,7 +18,7 @@ import kotlin.time.ExperimentalTime
 
 /**
  * Capa de datos del patron MVVM: el ViewModel pide aca lo que necesita y no
- * sabe nada de Ktor, de JSON ni del orden [lon, lat] de GeoJSON. [cache] es
+ * sabe nada de Retrofit/Ktor, de JSON ni del orden [lon, lat] de GeoJSON. [cache] es
  * opcional (null en los @Preview y en tests): cuando esta presente, cada
  * ruta calculada con exito se guarda y, si la red falla por un motivo que
  * no es un error propio del backend ([ApioApiException] -- ej. "fuera del
@@ -26,7 +26,7 @@ import kotlin.time.ExperimentalTime
  * en vez de romper la pantalla.
  */
 class ApioRepository(
-    private val api: ApioApiClient,
+    private val api: ApioApi,
     private val cache: RutaCacheStore? = null,
 ) {
 
@@ -90,10 +90,12 @@ class ApioRepository(
     /**
      * Establecimientos de salud de Arequipa: primero del backend
      * (/api/establecimientos, RENIPRESS + OSM) y se guardan en el cache
-     * local; si no hay red, la ultima lista guardada; y si nunca se
+     * local (Room); si no hay red, la ultima lista guardada; y si nunca se
      * descargo, la lista fija [HOSPITALES] para que la app siga usable.
+     * Devuelve tambien de donde salieron, para que el ViewModel sepa si
+     * debe volver a intentar con el servidor.
      */
-    suspend fun obtenerHospitales(): List<Hospital> {
+    suspend fun obtenerHospitales(): ListaHospitales {
         try {
             val remotos = api.obtenerEstablecimientos().establecimientos.map(::aHospital)
             if (remotos.isNotEmpty()) {
@@ -102,7 +104,7 @@ class ApioRepository(
                 } catch (_: Exception) {
                     // best-effort: la lista ya llego, el cache es secundario
                 }
-                return remotos
+                return ListaHospitales(remotos, OrigenDatos.SERVIDOR)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -114,7 +116,11 @@ class ApioRepository(
         } catch (_: Exception) {
             emptyList()
         }
-        return cacheados.ifEmpty { HOSPITALES }
+        return if (cacheados.isNotEmpty()) {
+            ListaHospitales(cacheados, OrigenDatos.CACHE)
+        } else {
+            ListaHospitales(HOSPITALES, OrigenDatos.RESPALDO)
+        }
     }
 
     fun cerrar() = api.cerrar()
@@ -172,3 +178,8 @@ internal fun construirRecomendacionRequest(
         riesgoPuntaje = riesgo.puntaje,
     )
 }
+
+/** De donde salio una lista de datos. */
+enum class OrigenDatos { SERVIDOR, CACHE, RESPALDO }
+
+data class ListaHospitales(val hospitales: List<Hospital>, val origen: OrigenDatos)

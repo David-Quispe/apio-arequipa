@@ -46,6 +46,7 @@ import pe.apio.mobile.viewmodel.MapaUiState
 @Composable
 fun PantallaMapa(
     uiState: MapaUiState,
+    hospitales: List<Hospital>,
     seguimientoActivo: Boolean,
     onToggleSeguimiento: () -> Unit,
     onTapMapa: (LatLon) -> Unit,
@@ -60,9 +61,9 @@ fun PantallaMapa(
     // Por defecto el mapa muestra solo los destinos con emergencia; "Todos"
     // suma los puestos y centros de salud de primer nivel (en gris).
     var verTodos by rememberSaveable { mutableStateOf(false) }
-    val totalEmergencia = remember(uiState.hospitales) { uiState.hospitales.count { it.emergencia } }
-    val hospitalesMapa = remember(uiState.hospitales, verTodos) {
-        if (verTodos) uiState.hospitales else uiState.hospitales.filter { it.emergencia }
+    val totalEmergencia = remember(hospitales) { hospitales.count { it.emergencia } }
+    val hospitalesMapa = remember(hospitales, verTodos) {
+        if (verTodos) hospitales else hospitales.filter { it.emergencia }
     }
 
     Box(modifier.fillMaxSize()) {
@@ -91,7 +92,7 @@ fun PantallaMapa(
                     onClick = { verTodos = false },
                 )
                 ChipCapa(
-                    texto = "Todos (${uiState.hospitales.size})",
+                    texto = "Todos (${hospitales.size})",
                     seleccionado = verTodos,
                     onClick = { verTodos = true },
                 )

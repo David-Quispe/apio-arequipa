@@ -14,10 +14,8 @@ import pe.apio.mobile.datos.ApioRepository
 import pe.apio.mobile.ia.EvaluacionRiesgo
 import pe.apio.mobile.ia.evaluarRiesgo
 import pe.apio.mobile.modelo.AvenidaTrafico
-import pe.apio.mobile.modelo.HOSPITALES
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
-import pe.apio.mobile.modelo.Traslado
 import pe.apio.mobile.ui.EstadoPantalla
 import pe.apio.mobile.ui.EstadoRuta
 
@@ -34,12 +32,10 @@ private const val TRAFICO_INTERVALO_MS = 25_000L
  */
 data class MapaUiState(
     val origen: LatLon = ORIGEN_INICIAL,
-    val hospitales: List<Hospital> = HOSPITALES,
     val estado: EstadoPantalla = EstadoPantalla.Vacio,
     val trafico: List<AvenidaTrafico> = emptyList(),
     val riesgo: EvaluacionRiesgo? = null,
     val recomendacion: EstadoRecomendacion? = null,
-    val historial: List<Traslado> = emptyList(),
 )
 
 /** Estado de la recomendacion del LLM (Gemini, via backend). Si no esta
@@ -82,13 +78,6 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
     private var claveRecomendacion: String? = null
 
     init {
-        viewModelScope.launch {
-            // RENIPRESS + OSM desde el backend, con respaldo en cache y en la
-            // lista local HOSPITALES (que ya esta en uiState mientras carga)
-            val hospitales = repositorio.obtenerHospitales()
-            _uiState.update { it.copy(hospitales = hospitales) }
-        }
-        viewModelScope.launch { recargarHistorial() }
         iniciarSondeo()
     }
 
@@ -96,6 +85,7 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
 
     fun seleccionarHospital(hospital: Hospital) {
         rutaJob?.cancel()
+        origenUltimoRecalculo = _uiState.value.origen
         reiniciarRecomendacion()
         _uiState.update { it.copy(estado = EstadoPantalla.Cargando(hospital), recomendacion = null) }
         val origen = _uiState.value.origen
@@ -128,6 +118,44 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
         }
     }
 
+    // Ultimo punto desde el que se recalculo la ruta con el GPS real.
+    private var origenUltimoRecalculo: LatLon? = null
+    private var gpsJob: Job? = null
+
+    /**
+     * Posicion GPS real (SeguimientoUbicacionServicio). A diferencia de
+     * [moverOrigen] (tocar el mapa), NO borra la ruta activa: mueve la
+     * ambulancia y, si ya avanzo lo suficiente, recalcula la ruta en silencio
+     * desde la nueva posicion hacia el mismo hospital.
+     */
+    fun actualizarUbicacionReal(nuevoOrigen: LatLon) {
+        _uiState.update { it.copy(origen = nuevoOrigen) }
+        val exito = _uiState.value.estado as? EstadoPantalla.Exito ?: return
+        val anterior = origenUltimoRecalculo
+        if (anterior != null && distanciaAproxM(anterior, nuevoOrigen) < DISTANCIA_RECALCULO_M) return
+        if (gpsJob?.isActive == true) return
+        origenUltimoRecalculo = nuevoOrigen
+        val destino = exito.ruta.destino
+        gpsJob = viewModelScope.launch {
+            try {
+                val nueva = repositorio.obtenerRuta(nuevoOrigen, destino)
+                _uiState.update { actual ->
+                    val estadoActual = actual.estado
+                    if (estadoActual is EstadoPantalla.Exito && estadoActual.ruta.destino.nombre == destino.nombre) {
+                        actual.copy(estado = EstadoPantalla.Exito(nueva)).conRiesgoRecalculado()
+                    } else {
+                        actual
+                    }
+                }
+                revisarRecomendacion()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // sin red: la ambulancia se sigue moviendo sobre la ruta vieja
+            }
+        }
+    }
+
     fun cerrarPanel() {
         rutaJob?.cancel()
         reiniciarRecomendacion()
@@ -147,20 +175,9 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
             } catch (_: Exception) {
                 // best-effort: un fallo del historial no afecta la ruta
             }
-            recargarHistorial()
         }
     }
 
-    private suspend fun recargarHistorial() {
-        try {
-            val historial = repositorio.obtenerHistorial()
-            _uiState.update { it.copy(historial = historial) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // sin cache disponible: el historial queda vacio
-        }
-    }
 
     // ---- Recomendacion del LLM ----
 
@@ -232,8 +249,7 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
                 val estadoActual = actual.estado
                 // Solo se aplica si el usuario sigue viendo la misma ruta.
                 if (estadoActual is EstadoPantalla.Exito &&
-                    estadoActual.ruta.destino.nombre == destino.nombre &&
-                    actual.origen == inicial.origen
+                    estadoActual.ruta.destino.nombre == destino.nombre
                 ) {
                     actual.copy(
                         estado = EstadoPantalla.Exito(
@@ -258,7 +274,14 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
         }
     }
 
-    override fun onCleared() {
-        repositorio.cerrar()
-    }
+}
+
+private const val DISTANCIA_RECALCULO_M = 40.0
+
+/** Distancia aproximada en metros (equirectangular: sobra para tramos cortos). */
+private fun distanciaAproxM(a: LatLon, b: LatLon): Double {
+    val radLat = (a.lat + b.lat) / 2 * kotlin.math.PI / 180
+    val dx = (b.lon - a.lon) * 111_320.0 * kotlin.math.cos(radLat)
+    val dy = (b.lat - a.lat) * 110_540.0
+    return kotlin.math.sqrt(dx * dx + dy * dy)
 }
