@@ -3,7 +3,7 @@ package pe.apio.mobile.modelo
 /**
  * Un traslado registrado en el historial local: cada vez que se calcula una
  * ruta a un hospital se guarda uno (ver ApioRepository.registrarTraslado).
- * Se persiste en SQLite en Android (tabla "traslados" de ApioSqliteHelper)
+ * Se persiste con Room en Android (tabla "traslados", ver datos/room)
  * y alimenta las pantallas de Historial y Perfil.
  */
 data class Traslado(

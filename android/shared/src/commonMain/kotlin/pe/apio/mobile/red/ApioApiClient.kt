@@ -29,7 +29,7 @@ class ApioApiException(message: String) : Exception(message)
  * (ver backend/app/api/routes/route.py y traffic.py). No cambia nada del
  * backend -- esta app es un cliente mas.
  */
-class ApioApiClient(private val baseUrl: String) {
+class ApioApiClient(private val baseUrl: String) : ApioApi {
     private val client = HttpClient(motorHttpCliente()) {
         expectSuccess = true
         install(ContentNegotiation) {
@@ -37,7 +37,7 @@ class ApioApiClient(private val baseUrl: String) {
         }
     }
 
-    suspend fun obtenerRuta(
+    override suspend fun obtenerRuta(
         origenLat: Double,
         origenLon: Double,
         destLat: Double,
@@ -51,18 +51,18 @@ class ApioApiClient(private val baseUrl: String) {
         }.body()
     }
 
-    suspend fun obtenerTrafico(): TrafficResponse = manejarErrores {
+    override suspend fun obtenerTrafico(): TrafficResponse = manejarErrores {
         client.get("$baseUrl/traffic").body()
     }
 
     /** Todos los establecimientos de salud de Arequipa (RENIPRESS + OSM). */
-    suspend fun obtenerEstablecimientos(): EstablecimientosResponse = manejarErrores {
+    override suspend fun obtenerEstablecimientos(): EstablecimientosResponse = manejarErrores {
         client.get("$baseUrl/establecimientos").body()
     }
 
     /** Recomendacion del LLM (Gemini) generada en el backend: la API key
      * nunca viaja dentro del APK. Un 503 significa "IA no disponible". */
-    suspend fun obtenerRecomendacionIa(datos: RecomendacionRequest): RecomendacionResponse = manejarErrores {
+    override suspend fun obtenerRecomendacionIa(datos: RecomendacionRequest): RecomendacionResponse = manejarErrores {
         client.post("$baseUrl/ia/recomendacion") {
             contentType(ContentType.Application.Json)
             setBody(datos)
@@ -70,7 +70,7 @@ class ApioApiClient(private val baseUrl: String) {
     }
 
     /** Libera el motor HTTP; lo llama el ViewModel en onCleared(). */
-    fun cerrar() {
+    override fun cerrar() {
         client.close()
     }
 

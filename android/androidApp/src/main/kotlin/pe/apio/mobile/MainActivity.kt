@@ -20,18 +20,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import pe.apio.mobile.datos.ApioRepository
-import pe.apio.mobile.datos.ApioSqliteHelper
-import pe.apio.mobile.datos.SqliteRutaCacheStore
-import pe.apio.mobile.red.ApioApiClient
+import pe.apio.mobile.datos.RoomRutaCacheStore
+import pe.apio.mobile.datos.room.ApioDatabase
+import pe.apio.mobile.red.RetrofitApioApi
 import pe.apio.mobile.servicio.SeguimientoUbicacionServicio
 
-// 10.0.2.2 es el alias del emulador Android hacia el localhost de la
-// maquina host, donde corre el backend real.
-private const val API_BASE_URL = "http://10.0.2.2:8000/api"
+// Backend desplegado en la VM de Azure (NGINX + HTTPS, dominio DuckDNS):
+// funciona desde cualquier celular con datos o Wi-Fi.
+private const val API_BASE_URL = "https://apio-arequipa.duckdns.org/api"
+
+// Para desarrollo con el backend en tu PC y el emulador, usa esta otra
+// (10.0.2.2 es el alias del emulador hacia el localhost del host):
+// private const val API_BASE_URL = "http://10.0.2.2:8000/api"
 
 /**
  * Ademas de alojar el Composable [App], esta Activity es quien sabe de
- * Android "de verdad": arma el cache SQLite (ver datos/ApioSqliteHelper),
+ * Android "de verdad": arma la red con Retrofit, el cache con Room (ver datos/room),
  * y liga/desliga el foreground service de ubicacion real pidiendo el
  * permiso en tiempo de ejecucion. [App] en shared no conoce nada de esto --
  * solo recibe una fabrica de [ApioRepository] y un Flow de ubicacion.
@@ -68,8 +72,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 crearRepositorio = {
-                    val cache = SqliteRutaCacheStore(ApioSqliteHelper(applicationContext))
-                    ApioRepository(ApioApiClient(API_BASE_URL), cache)
+                    // Retrofit para la red y Room para el cache local
+                    val cache = RoomRutaCacheStore(ApioDatabase.obtener(applicationContext))
+                    ApioRepository(RetrofitApioApi(API_BASE_URL), cache)
                 },
                 ubicacionReal = servicioUbicacion?.ubicacion,
                 ubicacionActiva = ubicacionActiva,

@@ -5,8 +5,8 @@ import pe.apio.mobile.modelo.Traslado
 import pe.apio.mobile.ui.EstadoRuta
 
 /**
- * Puerto de cache que implementa cada plataforma (en Android, con SQLite
- * nativo -- ver androidApp/.../datos/SqliteRutaCacheStore.kt). El modulo
+ * Puerto de cache que implementa cada plataforma (en Android, con Room
+ * -- ver androidApp/.../datos/RoomRutaCacheStore.kt). El modulo
  * shared no sabe nada de Android ni de bases de datos: solo pide/guarda
  * estos datos para que [ApioRepository] pueda responder sin red.
  */

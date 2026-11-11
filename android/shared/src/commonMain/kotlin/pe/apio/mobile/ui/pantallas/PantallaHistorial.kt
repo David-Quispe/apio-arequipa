@@ -43,7 +43,7 @@ import kotlin.time.ExperimentalTime
 
 /**
  * Pantalla "03 · Historial" del diseno de Figma. Los traslados salen del
- * historial persistido en SQLite (tabla "traslados"): se guarda uno cada vez
+ * historial persistido en Room (tabla "traslados"): se guarda uno cada vez
  * que se calcula una ruta a un hospital.
  */
 @OptIn(ExperimentalTime::class)
