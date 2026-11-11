@@ -1,4 +1,13 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+// Clave de MapTiler (teselas vectoriales del mapa). Vive en local.properties,
+// que esta en .gitignore: nunca se sube al repositorio. Si falta, la app usa
+// un estilo libre sin clave (ver ConfigMapa en :shared).
+val claveMapTiler: String = Properties().apply {
+    val archivo = rootDir.resolve("local.properties")
+    if (archivo.exists()) archivo.inputStream().use { load(it) }
+}.getProperty("MAPTILER_KEY", "").trim()
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -42,6 +51,7 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "MAPTILER_KEY", "\"$claveMapTiler\"")
     }
     packaging {
         resources {
@@ -63,5 +73,6 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }

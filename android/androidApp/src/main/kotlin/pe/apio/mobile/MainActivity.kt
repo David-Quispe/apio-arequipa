@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import pe.apio.mobile.datos.ApioRepository
 import pe.apio.mobile.datos.RoomRutaCacheStore
 import pe.apio.mobile.datos.room.ApioDatabase
+import pe.apio.mobile.mapa.ConfigMapa
 import pe.apio.mobile.red.RetrofitApioApi
 import pe.apio.mobile.servicio.SeguimientoUbicacionServicio
 
@@ -68,6 +69,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        // La clave de MapTiler la conoce solo este modulo (BuildConfig, leida
+        // de local.properties); el mapa vive en :shared y la recibe por aqui.
+        ConfigMapa.claveMapTiler = BuildConfig.MAPTILER_KEY
 
         setContent {
             App(
