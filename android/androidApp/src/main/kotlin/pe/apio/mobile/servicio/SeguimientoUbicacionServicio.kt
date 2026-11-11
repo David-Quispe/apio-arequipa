@@ -20,11 +20,14 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import pe.apio.mobile.modelo.LatLon
+import pe.apio.mobile.modelo.PosicionGps
 
 private const val CANAL_ID = "apio_seguimiento"
 private const val NOTIFICACION_ID = 1001
-private const val INTERVALO_MIN_MS = 3_000L
-private const val DISTANCIA_MIN_M = 5f
+// Una lectura por segundo: el mapa desliza la ambulancia de una posicion a la
+// siguiente, y con lecturas mas espaciadas se veria avanzar a tirones.
+private const val INTERVALO_MIN_MS = 1_000L
+private const val DISTANCIA_MIN_M = 2f
 
 /**
  * Servicio en primer plano que pide la ubicacion GPS real del dispositivo
@@ -36,8 +39,10 @@ private const val DISTANCIA_MIN_M = 5f
  */
 class SeguimientoUbicacionServicio : Service() {
 
-    private val _ubicacion = MutableStateFlow<LatLon?>(null)
-    val ubicacion: StateFlow<LatLon?> = _ubicacion
+    private val _posicion = MutableStateFlow<PosicionGps?>(null)
+
+    /** Ultima lectura aceptada: punto + rumbo y velocidad si el GPS los da. */
+    val posicion: StateFlow<PosicionGps?> = _posicion
 
     private lateinit var administradorUbicacion: LocationManager
 
@@ -131,7 +136,13 @@ class SeguimientoUbicacionServicio : Service() {
         val reciente = anterior != null && location.time - anterior.time < 10_000L
         if (reciente && location.accuracy > anterior!!.accuracy * 2) return
         ultimaAceptada = location
-        _ubicacion.value = LatLon(location.latitude, location.longitude)
+        _posicion.value = PosicionGps(
+            punto = LatLon(location.latitude, location.longitude),
+            // el rumbo del GPS es el mas fiable para orientar la ambulancia y
+            // la camara; la ubicacion por red no lo trae
+            rumbo = if (location.hasBearing()) location.bearing else null,
+            velocidadMs = if (location.hasSpeed()) location.speed else null,
+        )
     }
 
     override fun onDestroy() {

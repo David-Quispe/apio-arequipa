@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -22,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +60,14 @@ fun PantallaMapa(
 ) {
     val ruta = (uiState.estado as? EstadoPantalla.Exito)?.ruta
 
+    // Modo navegacion: hay una ruta y el GPS real esta moviendo la ambulancia.
+    // El mapa pasa a camara inclinada que la sigue, como Google Maps.
+    val modoNavegacion = ruta != null && seguimientoActivo
+    // Pasa a false cuando el usuario arrastra el mapa para mirar otra zona;
+    // el boton "Recentrar" lo devuelve a true.
+    var siguiendoCamara by remember { mutableStateOf(true) }
+    LaunchedEffect(modoNavegacion) { siguiendoCamara = true }
+
     // Por defecto el mapa muestra solo los destinos con emergencia; "Todos"
     // suma los puestos y centros de salud de primer nivel (en gris).
     var verTodos by rememberSaveable { mutableStateOf(false) }
@@ -70,10 +80,16 @@ fun PantallaMapa(
         MapaApio(
             modifier = Modifier.fillMaxSize(),
             origen = uiState.origen,
+            rumbo = uiState.rumbo,
             hospitales = hospitalesMapa,
             rutaPuntos = ruta?.puntos ?: emptyList(),
-            onTapMapa = onTapMapa,
+            modoNavegacion = modoNavegacion,
+            siguiendoCamara = siguiendoCamara,
+            // Navegando, la posicion la manda el GPS: un toque accidental en
+            // el mapa no debe mover el origen ni borrar la ruta.
+            onTapMapa = { punto -> if (!modoNavegacion) onTapMapa(punto) },
             onTapHospital = onTapHospital,
+            onCamaraMovidaPorUsuario = { siguiendoCamara = false },
         )
 
         Column(
@@ -100,6 +116,20 @@ fun PantallaMapa(
         }
 
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            if (modoNavegacion && !siguiendoCamara) {
+                // Grande a proposito: se toca manejando
+                ExtendedFloatingActionButton(
+                    onClick = { siguiendoCamara = true },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 12.dp)
+                        .height(64.dp),
+                    icon = { Icon(IconosApio.Navegacion, contentDescription = null) },
+                    text = { Text("Recentrar", style = MaterialTheme.typography.titleMedium) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
             FloatingActionButton(
                 onClick = onToggleSeguimiento,
                 modifier = Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 12.dp),

@@ -23,7 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.StateFlow
 import pe.apio.mobile.datos.ApioRepository
-import pe.apio.mobile.modelo.LatLon
+import pe.apio.mobile.modelo.PosicionGps
 import pe.apio.mobile.red.ApioApiClient
 import pe.apio.mobile.ui.IconosApio
 import pe.apio.mobile.ui.pantallas.PantallaHistorial
@@ -76,7 +76,7 @@ private fun Pestana.icono(): ImageVector = when (this) {
 @Preview
 fun App(
     crearRepositorio: () -> ApioRepository = { ApioRepository(ApioApiClient(API_BASE_URL)) },
-    ubicacionReal: StateFlow<LatLon?>? = null,
+    ubicacionReal: StateFlow<PosicionGps?>? = null,
     ubicacionActiva: Boolean = false,
     onToggleUbicacion: () -> Unit = {},
 ) {
@@ -103,7 +103,11 @@ fun App(
 
     if (ubicacionReal != null) {
         LaunchedEffect(ubicacionReal) {
-            ubicacionReal.collect { ubicacion -> ubicacion?.let(viewModel::actualizarUbicacionReal) }
+            ubicacionReal.collect { posicion ->
+                if (posicion != null) {
+                    viewModel.actualizarUbicacionReal(posicion.punto, posicion.rumbo, posicion.velocidadMs)
+                }
+            }
         }
     }
 

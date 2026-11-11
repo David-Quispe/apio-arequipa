@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
                     val cache = RoomRutaCacheStore(ApioDatabase.obtener(applicationContext))
                     ApioRepository(RetrofitApioApi(API_BASE_URL), cache)
                 },
-                ubicacionReal = servicioUbicacion?.ubicacion,
+                ubicacionReal = servicioUbicacion?.posicion,
                 ubicacionActiva = ubicacionActiva,
                 onToggleUbicacion = ::alternarSeguimientoReal,
             )

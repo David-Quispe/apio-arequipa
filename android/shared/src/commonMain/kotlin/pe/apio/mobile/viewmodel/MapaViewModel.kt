@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import pe.apio.mobile.datos.ApioRepository
 import pe.apio.mobile.ia.EvaluacionRiesgo
 import pe.apio.mobile.ia.evaluarRiesgo
+import pe.apio.mobile.mapa.siguienteRumbo
 import pe.apio.mobile.modelo.AvenidaTrafico
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
@@ -32,6 +33,9 @@ private const val TRAFICO_INTERVALO_MS = 25_000L
  */
 data class MapaUiState(
     val origen: LatLon = ORIGEN_INICIAL,
+    // Hacia donde apunta la ambulancia, en grados (0 = norte). Orienta el
+    // icono y, en modo navegacion, la camara del mapa.
+    val rumbo: Float = 0f,
     val estado: EstadoPantalla = EstadoPantalla.Vacio,
     val trafico: List<AvenidaTrafico> = emptyList(),
     val riesgo: EvaluacionRiesgo? = null,
@@ -127,9 +131,18 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
      * [moverOrigen] (tocar el mapa), NO borra la ruta activa: mueve la
      * ambulancia y, si ya avanzo lo suficiente, recalcula la ruta en silencio
      * desde la nueva posicion hacia el mismo hospital.
+     *
+     * [rumboGps] y [velocidadMs] son opcionales (el GPS no siempre los da):
+     * con ellos o sin ellos se actualiza el rumbo de la ambulancia, que no
+     * cambia mientras esta detenida (ver [siguienteRumbo]).
      */
-    fun actualizarUbicacionReal(nuevoOrigen: LatLon) {
-        _uiState.update { it.copy(origen = nuevoOrigen) }
+    fun actualizarUbicacionReal(nuevoOrigen: LatLon, rumboGps: Float? = null, velocidadMs: Float? = null) {
+        _uiState.update {
+            it.copy(
+                origen = nuevoOrigen,
+                rumbo = siguienteRumbo(it.origen, nuevoOrigen, it.rumbo, rumboGps, velocidadMs),
+            )
+        }
         val exito = _uiState.value.estado as? EstadoPantalla.Exito ?: return
         val anterior = origenUltimoRecalculo
         if (anterior != null && distanciaAproxM(anterior, nuevoOrigen) < DISTANCIA_RECALCULO_M) return
