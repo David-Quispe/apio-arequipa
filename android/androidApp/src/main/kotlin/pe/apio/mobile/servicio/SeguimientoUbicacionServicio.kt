@@ -14,6 +14,7 @@ import android.location.LocationManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,9 +41,7 @@ class SeguimientoUbicacionServicio : Service() {
 
     private lateinit var administradorUbicacion: LocationManager
 
-    private val listener = LocationListener { location: Location ->
-        _ubicacion.value = LatLon(location.latitude, location.longitude)
-    }
+    private val listener = LocationListener { location: Location -> aceptarUbicacion(location) }
 
     inner class EnlaceLocal : Binder() {
         fun servicio(): SeguimientoUbicacionServicio = this@SeguimientoUbicacionServicio
@@ -97,12 +96,42 @@ class SeguimientoUbicacionServicio : Service() {
             stopSelf()
             return
         }
-        administradorUbicacion.requestLocationUpdates(
-            LocationManager.GPS_PROVIDER,
-            INTERVALO_MIN_MS,
-            DISTANCIA_MIN_M,
-            listener,
-        )
+        // GPS solo da posicion al aire libre y puede tardar minutos en el
+        // primer fix; la red (Wi-Fi/antenas) responde en segundos aunque sea
+        // menos precisa. Se piden las dos y se queda con la mas precisa.
+        val proveedores = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .filter { administradorUbicacion.isProviderEnabled(it) }
+        if (proveedores.isEmpty()) {
+            // ubicacion del celular apagada en Ajustes
+            stopSelf()
+            return
+        }
+        // arranca con la ultima posicion conocida para no esperar al primer fix
+        proveedores
+            .mapNotNull { administradorUbicacion.getLastKnownLocation(it) }
+            .maxByOrNull { it.time }
+            ?.let(::aceptarUbicacion)
+        proveedores.forEach { proveedor ->
+            administradorUbicacion.requestLocationUpdates(
+                proveedor,
+                INTERVALO_MIN_MS,
+                DISTANCIA_MIN_M,
+                listener,
+                Looper.getMainLooper(),
+            )
+        }
+    }
+
+    private var ultimaAceptada: Location? = null
+
+    /** Descarta una lectura de red imprecisa si hace poco llego una de GPS
+     * mejor, para que la ambulancia no salte de un lado a otro. */
+    private fun aceptarUbicacion(location: Location) {
+        val anterior = ultimaAceptada
+        val reciente = anterior != null && location.time - anterior.time < 10_000L
+        if (reciente && location.accuracy > anterior!!.accuracy * 2) return
+        ultimaAceptada = location
+        _ubicacion.value = LatLon(location.latitude, location.longitude)
     }
 
     override fun onDestroy() {
