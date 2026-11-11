@@ -25,13 +25,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import pe.apio.mobile.ia.NivelRiesgo
 import pe.apio.mobile.mapa.MapaApio
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
@@ -40,10 +44,35 @@ import pe.apio.mobile.ui.HojaRuta
 import pe.apio.mobile.ui.IconosApio
 import pe.apio.mobile.viewmodel.MapaUiState
 
+// Cuanto dura en pantalla un aviso del modo conduccion antes de cerrarse solo.
+private const val DURACION_ALERTA_MS = 5_000L
+
+/** Aviso corto del modo conduccion (cambio de riesgo / trafico). */
+private data class AlertaConduccion(val texto: String, val grave: Boolean)
+
+/** El aviso que corresponde al pasar de un nivel de riesgo a otro; null si
+ * no vale la pena distraer a quien maneja. */
+private fun alertaPorRiesgo(anterior: NivelRiesgo?, actual: NivelRiesgo): AlertaConduccion? = when {
+    actual == NivelRiesgo.ALTO ->
+        AlertaConduccion("Riesgo de demora alto: tráfico fuerte en la ruta", grave = true)
+    // al empezar a navegar solo se avisa si el riesgo es alto
+    anterior == null -> null
+    actual.ordinal > anterior.ordinal ->
+        AlertaConduccion("El tráfico aumentó: riesgo de demora moderado", grave = false)
+    actual == NivelRiesgo.MEDIO ->
+        AlertaConduccion("El tráfico mejoró: riesgo de demora moderado", grave = false)
+    else -> AlertaConduccion("El tráfico mejoró: riesgo de demora bajo", grave = false)
+}
+
 /**
  * Pantalla "01 · Mapa — Ruta sugerida" del diseno de Figma: mapa a pantalla
  * completa, buscador arriba, FAB de ubicacion y la hoja de ruta abajo. Recibe
  * el estado ya listo del ViewModel y solo reenvia eventos.
+ *
+ * Con ruta activa y GPS real entra en modo conduccion: se ocultan el buscador
+ * y los filtros, la hoja se compacta (ETA grande + "Terminar") y los cambios
+ * de riesgo se avisan arriba con una tarjeta que se cierra sola.
+ * [temaOscuro] elige el estilo nocturno del mapa.
  */
 @Composable
 fun PantallaMapa(
@@ -57,6 +86,7 @@ fun PantallaMapa(
     onReintentar: (Hospital) -> Unit,
     onBuscar: () -> Unit,
     modifier: Modifier = Modifier,
+    temaOscuro: Boolean = false,
 ) {
     val ruta = (uiState.estado as? EstadoPantalla.Exito)?.ruta
 
@@ -67,6 +97,31 @@ fun PantallaMapa(
     // el boton "Recentrar" lo devuelve a true.
     var siguiendoCamara by remember { mutableStateOf(true) }
     LaunchedEffect(modoNavegacion) { siguiendoCamara = true }
+
+    // Alto de la hoja inferior: el mapa lo usa para no dejar la ambulancia
+    // ni la ruta escondidas detras de ella.
+    var altoHojaPx by remember { mutableIntStateOf(0) }
+
+    // Avisos del modo conduccion: aparecen cuando cambia el nivel de riesgo
+    // (que sale del trafico en vivo) y se cierran solos.
+    var alerta by remember { mutableStateOf<AlertaConduccion?>(null) }
+    val nivelRiesgo = uiState.riesgo?.nivel
+    val nivelVisto = remember { arrayOfNulls<NivelRiesgo>(1) }
+    LaunchedEffect(modoNavegacion, nivelRiesgo) {
+        val anterior = nivelVisto[0]
+        nivelVisto[0] = if (modoNavegacion) nivelRiesgo else null
+        if (!modoNavegacion) {
+            alerta = null
+        } else if (nivelRiesgo != null && nivelRiesgo != anterior) {
+            alertaPorRiesgo(anterior, nivelRiesgo)?.let { alerta = it }
+        }
+    }
+    LaunchedEffect(alerta) {
+        if (alerta != null) {
+            delay(DURACION_ALERTA_MS)
+            alerta = null
+        }
+    }
 
     // Por defecto el mapa muestra solo los destinos con emergencia; "Todos"
     // suma los puestos y centros de salud de primer nivel (en gris).
@@ -85,6 +140,8 @@ fun PantallaMapa(
             rutaPuntos = ruta?.puntos ?: emptyList(),
             modoNavegacion = modoNavegacion,
             siguiendoCamara = siguiendoCamara,
+            oscuro = temaOscuro,
+            margenInferiorPx = altoHojaPx,
             // Navegando, la posicion la manda el GPS: un toque accidental en
             // el mapa no debe mover el origen ni borrar la ruta.
             onTapMapa = { punto -> if (!modoNavegacion) onTapMapa(punto) },
@@ -92,7 +149,20 @@ fun PantallaMapa(
             onCamaraMovidaPorUsuario = { siguiendoCamara = false },
         )
 
-        Column(
+        if (modoNavegacion) {
+            // Manejando no hay buscador ni filtros: solo, cuando hace falta,
+            // un aviso arriba que no tapa la ruta.
+            alerta?.let { aviso ->
+                TarjetaAlerta(
+                    aviso,
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth(),
+                )
+            }
+        } else Column(
             Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
@@ -130,7 +200,8 @@ fun PantallaMapa(
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                 )
             }
-            FloatingActionButton(
+            // En modo conduccion el GPS se apaga con "Terminar"
+            if (!modoNavegacion) FloatingActionButton(
                 onClick = onToggleSeguimiento,
                 modifier = Modifier.align(Alignment.End).padding(end = 16.dp, bottom = 12.dp),
                 containerColor = if (seguimientoActivo) {
@@ -159,7 +230,49 @@ fun PantallaMapa(
                 onCerrar = onCerrarRuta,
                 onReintentar = onReintentar,
                 onVerHospitales = onBuscar,
+                modifier = Modifier.onSizeChanged { altoHojaPx = it.height },
+                modoNavegacion = modoNavegacion,
+                // terminar el traslado: se apaga el GPS real y se cierra la ruta
+                onTerminar = {
+                    onToggleSeguimiento()
+                    onCerrarRuta()
+                },
             )
+        }
+    }
+}
+
+/** Aviso temporal del modo conduccion (se cierra solo, ver [DURACION_ALERTA_MS]). */
+@Composable
+private fun TarjetaAlerta(alerta: AlertaConduccion, modifier: Modifier = Modifier) {
+    val fondo = if (alerta.grave) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val contenido = if (alerta.grave) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = fondo,
+        contentColor = contenido,
+        shadowElevation = 6.dp,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                if (alerta.grave) IconosApio.Alerta else IconosApio.Trafico,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(alerta.texto, style = MaterialTheme.typography.titleSmall)
         }
     }
 }

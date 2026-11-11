@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,14 +37,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pe.apio.mobile.ia.EvaluacionRiesgo
 import pe.apio.mobile.ia.NivelRiesgo
@@ -59,8 +64,12 @@ import pe.apio.mobile.viewmodel.EstadoRecomendacion
  * Hoja inferior de la pantalla del mapa (el "Bottom sheet · Ruta" del diseno
  * de Figma). Reemplaza al panel flotante de arriba que tapaba medio mapa.
  * Solo DIBUJA el estado que le pasa el ViewModel: un estado de
- * [EstadoPantalla], una vista. Tocar el asa la expande o contrae para
- * mostrar u ocultar los detalles (privilegios y trafico).
+ * [EstadoPantalla], una vista. Tocar el asa (o deslizarla) la expande o
+ * contrae para mostrar u ocultar los detalles (privilegios y trafico).
+ *
+ * Con [modoNavegacion] (ruta activa + GPS real) pasa a modo conduccion: una
+ * franja compacta con el ETA en grande y un unico boton "Terminar", para
+ * leer de un vistazo y no tapar el mapa. El detalle queda al expandirla.
  */
 @Composable
 fun HojaRuta(
@@ -74,8 +83,12 @@ fun HojaRuta(
     onReintentar: (Hospital) -> Unit,
     onVerHospitales: () -> Unit,
     modifier: Modifier = Modifier,
+    modoNavegacion: Boolean = false,
+    onTerminar: () -> Unit = {},
 ) {
     var expandida by rememberSaveable { mutableStateOf(false) }
+    // al empezar a navegar la hoja arranca compacta, aunque estuviera abierta
+    LaunchedEffect(modoNavegacion) { if (modoNavegacion) expandida = false }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -84,7 +97,10 @@ fun HojaRuta(
         shadowElevation = 8.dp,
     ) {
         Column(Modifier.fillMaxWidth().animateContentSize()) {
-            Asa(onClick = { expandida = !expandida })
+            Asa(
+                onClick = { expandida = !expandida },
+                onDeslizar = { haciaArriba -> expandida = haciaArriba },
+            )
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -96,7 +112,16 @@ fun HojaRuta(
                     is EstadoPantalla.Vacio -> ContenidoVacio(trafico, expandida, onVerHospitales)
                     is EstadoPantalla.Cargando -> ContenidoCargando(estado.hospital)
                     is EstadoPantalla.Error -> ContenidoError(estado, onCerrar, onReintentar)
-                    is EstadoPantalla.Exito -> ContenidoRuta(
+                    is EstadoPantalla.Exito -> if (modoNavegacion) {
+                        ContenidoNavegacion(
+                            ruta = estado.ruta,
+                            riesgo = riesgo,
+                            recomendacion = recomendacion,
+                            trafico = trafico,
+                            expandida = expandida,
+                            onTerminar = onTerminar,
+                        )
+                    } else ContenidoRuta(
                         ruta = estado.ruta,
                         riesgo = riesgo,
                         recomendacion = recomendacion,
@@ -114,10 +139,23 @@ fun HojaRuta(
 }
 
 @Composable
-private fun Asa(onClick: () -> Unit) {
+private fun Asa(onClick: () -> Unit, onDeslizar: (haciaArriba: Boolean) -> Unit) {
+    val deslizar by rememberUpdatedState(onDeslizar)
     Box(
         Modifier
             .fillMaxWidth()
+            // deslizar hacia arriba abre el detalle y hacia abajo lo cierra
+            .pointerInput(Unit) {
+                val umbral = 24.dp.toPx()
+                var recorrido = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { recorrido = 0f },
+                    onDragEnd = {
+                        if (recorrido < -umbral) deslizar(true)
+                        if (recorrido > umbral) deslizar(false)
+                    },
+                ) { _, delta -> recorrido += delta }
+            }
             .clickable(onClick = onClick)
             .padding(top = 12.dp, bottom = 14.dp),
         contentAlignment = Alignment.Center,
@@ -356,6 +394,96 @@ private fun ContenidoRuta(
                 color = MaterialTheme.colorScheme.primary,
             )
         }
+    }
+}
+
+// ---------------------------------------------------------------- Navegacion
+
+/**
+ * Modo conduccion: lo minimo para leer manejando. ETA grande, distancia,
+ * hospital y un solo boton grande. Todo lo demas (privilegios, riesgo,
+ * recomendacion IA, trafico) aparece recien al expandir la hoja.
+ */
+@Composable
+private fun ContenidoNavegacion(
+    ruta: EstadoRuta,
+    riesgo: EvaluacionRiesgo?,
+    recomendacion: EstadoRecomendacion?,
+    trafico: List<AvenidaTrafico>,
+    expandida: Boolean,
+    onTerminar: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    minutosCortos(ruta.tiempoSConTrafico),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "min",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 5.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "· ${formatearKmCorto(ruta.distanciaM)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 7.dp),
+                )
+            }
+            Text(
+                ruta.destino.nombre,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        // 64 dp de alto: se tiene que poder tocar sin apuntar
+        Button(
+            onClick = onTerminar,
+            modifier = Modifier.height(64.dp),
+            shape = RoundedCornerShape(32.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+            ),
+        ) {
+            Icon(IconosApio.Cerrar, contentDescription = null, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Terminar", style = MaterialTheme.typography.titleMedium)
+        }
+    }
+
+    if (expandida) {
+        if (ruta.privilegiosCruzados.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ruta.privilegiosCruzados.forEach { privilegio -> ChipPrivilegio(privilegio) }
+            }
+        }
+        if (riesgo != null) {
+            Spacer(Modifier.height(12.dp))
+            BannerRiesgo(riesgo.nivel)
+        }
+        if (recomendacion != null && recomendacion !is EstadoRecomendacion.NoDisponible) {
+            Spacer(Modifier.height(8.dp))
+            TarjetaRecomendacionIa(recomendacion)
+        }
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(12.dp))
+        SeccionTrafico(avenidas = trafico, avenidasRuta = ruta.avenidasTraficoCruzadas)
+        Spacer(Modifier.height(12.dp))
+        IndicadorAutoActualiza()
     }
 }
 
