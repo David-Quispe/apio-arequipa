@@ -36,7 +36,6 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
             implementation(libs.ktor.client.okhttp)
-            implementation(libs.osmdroid.android)
             // Mapa vectorial con camara inclinada (modo navegacion). Variante
             // por defecto del SDK: OpenGL ES, no Vulkan.
             implementation(libs.maplibre.android)

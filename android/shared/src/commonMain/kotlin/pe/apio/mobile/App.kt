@@ -146,6 +146,8 @@ fun App(
                     },
                     onBuscar = { pestana = Pestana.HOSPITALES },
                     modifier = contenido,
+                    // el mapa usa el estilo nocturno cuando la app esta en tema oscuro
+                    temaOscuro = temaOscuro,
                 )
                 Pestana.HOSPITALES -> PantallaHospitales(
                     hospitales = hospitalesState.hospitales,

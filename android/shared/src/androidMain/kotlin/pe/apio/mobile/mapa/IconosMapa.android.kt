@@ -5,14 +5,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 
 /**
  * Icono circular (color de fondo + emoji encima, con borde blanco y sombra)
  * para los marcadores del mapa -- mismo estilo que crearIconoCircular en
- * frontend/src/App.jsx, hecho a mano con Canvas porque osmdroid necesita un
- * Drawable/Bitmap concreto, no puede reusar HTML/CSS como Leaflet.
+ * frontend/src/App.jsx, hecho a mano con Canvas porque MapLibre necesita un
+ * Bitmap concreto para registrarlo como imagen del estilo (no puede reusar
+ * HTML/CSS como Leaflet).
  */
 fun crearBitmapCircular(context: Context, emoji: String, colorHex: String, sizeDp: Int = 34): Bitmap {
     val densidad = context.resources.displayMetrics.density
@@ -44,8 +43,3 @@ fun crearBitmapCircular(context: Context, emoji: String, colorHex: String, sizeD
 
     return bitmap
 }
-
-/** El mismo icono como Drawable, que es lo que pide osmdroid (el mapa nuevo
- * con MapLibre registra el Bitmap directo en el estilo). */
-fun crearIconoCircular(context: Context, emoji: String, colorHex: String, sizeDp: Int = 34): Drawable =
-    BitmapDrawable(context.resources, crearBitmapCircular(context, emoji, colorHex, sizeDp))

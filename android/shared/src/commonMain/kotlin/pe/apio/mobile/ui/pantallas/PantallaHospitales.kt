@@ -47,7 +47,7 @@ import pe.apio.mobile.ui.formatearKmCorto
 import pe.apio.mobile.ui.minutosCortos
 
 /** "#2563eb" -> Color. Los colores por tipo de hospital viven como texto en
- * modelo/Hospitales.kt porque los comparte el mapa nativo (osmdroid). */
+ * modelo/Hospitales.kt porque los comparte el mapa nativo (MapLibre). */
 internal fun colorDesdeHex(hex: String): Color =
     Color(("FF" + hex.removePrefix("#")).toLong(16))
 

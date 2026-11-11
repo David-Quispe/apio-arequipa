@@ -62,7 +62,7 @@ oraciones.
   - `ia/` `EstimadorRiesgo.kt`: heuristica on-device que clasifica el riesgo de demora de la ruta activa.
   - `viewmodel/` `MapaViewModel` y `MapaUiState` (flujo unidireccional con `StateFlow`).
   - `ui/` paneles Compose, `EstadoPantalla` (Vacio / Cargando / Exito / Error) y `ui/theme/` (`ApioTheme`).
-  - `mapa/` `expect fun MapaOSM`; la implementación con osmdroid está en `androidMain`.
+  - `mapa/` `expect fun MapaApio` y `Rumbo.kt`; la implementación con MapLibre Native (estilo MapTiler, clave `MAPTILER_KEY` en `android/local.properties`) está en `androidMain` (`MapaApio.android.kt` + `ControladorMapa.android.kt`). Criterio UI/UX: con ruta activa + GPS real la pantalla entra en modo conducción (cámara inclinada que sigue a la ambulancia, hoja compacta con ETA grande y botón "Terminar", botones de 56 dp o más, alertas que se cierran solas, mapa oscuro con el tema oscuro).
 - `androidApp/src/main/kotlin/.../pe/apio/mobile/`:
   - `MainActivity.kt` arma el `ApioRepository` con cache SQLite y liga/desliga el foreground service de
     ubicacion (unico lugar que sabe de Android "de verdad"; `App()` en shared no conoce nada de esto).

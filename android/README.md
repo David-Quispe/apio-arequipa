@@ -32,7 +32,7 @@ shared/src/commonMain/kotlin/pe/apio/mobile/
 ├── ia/          EstimadorRiesgo — heuristica on-device de riesgo de demora
 ├── viewmodel/   MapaViewModel + MapaUiState (StateFlow, flujo unidireccional)
 ├── ui/          Paneles Compose, EstadoPantalla, ui/theme/ (ApioTheme)
-├── mapa/        expect fun MapaOSM(...) — implementacion real en androidMain
+├── mapa/        expect fun MapaApio(...) — implementacion con MapLibre en androidMain
 └── App.kt       La V del MVVM: solo observa uiState y reenvia eventos
 
 androidApp/src/main/kotlin/pe/apio/mobile/
@@ -113,5 +113,30 @@ red falla. Documentado tambien en `CLAUDE.md` para que quede clara la decision y
 Por defecto, el origen de la ambulancia se mueve tocando el mapa (util para grabar la demo sin depender del
 GPS del emulador). El boton **"GPS real"** prende `SeguimientoUbicacionServicio`: un foreground service
 (`foregroundServiceType="location"`) que pide el permiso de ubicacion en tiempo de ejecucion y, una vez
-concedido, actualiza el origen con la ubicacion real del dispositivo cada ~3s/5m mientras la notificacion
-persistente esta visible.
+concedido, actualiza el origen con la ubicacion real del dispositivo cada ~1s/2m (con rumbo y velocidad
+cuando el GPS los informa) mientras la notificacion persistente esta visible.
+
+### Mapa y modo navegacion (MapLibre + MapTiler)
+
+El mapa usa **MapLibre Native Android** (vectorial, se puede inclinar y rotar) con estilos de **MapTiler**
+(`streets-v2` de dia, `streets-v2-dark` con el tema oscuro). Reemplaza a osmdroid, que era solo 2D.
+
+Para compilar hace falta una clave gratuita de https://cloud.maptiler.com en `android/local.properties`
+(el archivo esta en `.gitignore`, la clave nunca se sube):
+
+```
+MAPTILER_KEY=tu_clave_aqui
+```
+
+Sin clave la app igual funciona: cae a un estilo libre de OpenFreeMap.
+
+Con una ruta calculada y el GPS real prendido ("Iniciar ruta"), la pantalla entra en **modo navegacion**:
+
+- camara inclinada (55 grados) que sigue a la ambulancia y gira segun su rumbo;
+- ambulancia "falso 3D": un sprite propio que rota con el rumbo, se desliza entre lecturas del GPS y no
+  gira estando detenida (`mapa/Rumbo.kt`, con tests);
+- hoja inferior compacta con el ETA grande y el boton **Terminar**; el detalle se ve al expandirla;
+- boton **Recentrar** si se arrastra el mapa, y avisos de cambio de riesgo que se cierran solos.
+
+Todo el codigo de MapLibre esta en `shared/src/androidMain/.../mapa/` (`MapaApio.android.kt` maneja el
+ciclo de vida del `MapView`; `ControladorMapa.android.kt` el estilo, las capas y la camara).

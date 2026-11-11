@@ -18,7 +18,7 @@ import pe.apio.mobile.modelo.LatLon
 
 /**
  * Implementacion Android del mapa con MapLibre Native (mapa vectorial: se
- * puede inclinar y rotar, a diferencia de osmdroid que era solo 2D).
+ * puede inclinar y rotar, a diferencia de un mapa de teselas 2D).
  *
  * Este composable se ocupa de las tres cosas que MapLibre no resuelve solo
  * dentro de Compose: crear el MapView una unica vez, avisarle del ciclo de

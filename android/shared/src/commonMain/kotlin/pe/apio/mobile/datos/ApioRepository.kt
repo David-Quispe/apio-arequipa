@@ -45,7 +45,7 @@ class ApioRepository(
                 tiempoSConTrafico = respuesta.timeSConTrafico,
                 privilegiosCruzados = respuesta.privilegiosCruzados,
                 avenidasTraficoCruzadas = respuesta.avenidasTraficoCruzadas,
-                // GeoJSON viene como [lon, lat]; osmdroid necesita [lat, lon].
+                // GeoJSON viene como [lon, lat]; LatLon guarda (lat, lon).
                 puntos = respuesta.geometry.coordinates.map { LatLon(it[1], it[0]) },
             )
             cache?.guardarUltimaRuta(ruta)
