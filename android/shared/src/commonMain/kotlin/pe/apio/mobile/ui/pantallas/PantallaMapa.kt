@@ -30,7 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import pe.apio.mobile.mapa.MapaOSM
+import pe.apio.mobile.mapa.MapaApio
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
 import pe.apio.mobile.ui.EstadoPantalla
@@ -67,7 +67,7 @@ fun PantallaMapa(
     }
 
     Box(modifier.fillMaxSize()) {
-        MapaOSM(
+        MapaApio(
             modifier = Modifier.fillMaxSize(),
             origen = uiState.origen,
             hospitales = hospitalesMapa,

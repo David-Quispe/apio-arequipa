@@ -14,7 +14,7 @@ import android.graphics.drawable.Drawable
  * frontend/src/App.jsx, hecho a mano con Canvas porque osmdroid necesita un
  * Drawable/Bitmap concreto, no puede reusar HTML/CSS como Leaflet.
  */
-fun crearIconoCircular(context: Context, emoji: String, colorHex: String, sizeDp: Int = 34): Drawable {
+fun crearBitmapCircular(context: Context, emoji: String, colorHex: String, sizeDp: Int = 34): Bitmap {
     val densidad = context.resources.displayMetrics.density
     val sizePx = (sizeDp * densidad)
     val bitmap = Bitmap.createBitmap(sizePx.toInt(), sizePx.toInt(), Bitmap.Config.ARGB_8888)
@@ -42,5 +42,10 @@ fun crearIconoCircular(context: Context, emoji: String, colorHex: String, sizeDp
     val yTexto = centro - (paintTexto.descent() + paintTexto.ascent()) / 2
     canvas.drawText(emoji, centro, yTexto, paintTexto)
 
-    return BitmapDrawable(context.resources, bitmap)
+    return bitmap
 }
+
+/** El mismo icono como Drawable, que es lo que pide osmdroid (el mapa nuevo
+ * con MapLibre registra el Bitmap directo en el estilo). */
+fun crearIconoCircular(context: Context, emoji: String, colorHex: String, sizeDp: Int = 34): Drawable =
+    BitmapDrawable(context.resources, crearBitmapCircular(context, emoji, colorHex, sizeDp))

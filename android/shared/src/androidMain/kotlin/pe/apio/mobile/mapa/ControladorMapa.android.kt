@@ -1,0 +1,491 @@
+package pe.apio.mobile.mapa
+
+import android.animation.ValueAnimator
+import android.graphics.RectF
+import android.view.Gravity
+import android.view.animation.LinearInterpolator
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
+import pe.apio.mobile.modelo.COLOR_POR_TIPO
+import pe.apio.mobile.modelo.Hospital
+import pe.apio.mobile.modelo.LatLon
+import pe.apio.mobile.ui.distanciaLineaRectaM
+
+private const val FUENTE_RUTA = "ruta"
+private const val FUENTE_HOSPITALES = "hospitales"
+private const val FUENTE_AMBULANCIA = "ambulancia"
+private const val CAPA_RUTA_BORDE = "ruta-borde"
+private const val CAPA_RUTA_LINEA = "ruta-linea"
+private const val CAPA_HOSPITALES = "hospitales-capa"
+private const val CAPA_AMBULANCIA = "ambulancia-capa"
+
+private const val IMAGEN_AMBULANCIA = "ambulancia"
+private const val IMAGEN_HOSPITAL_OTRO = "hosp_Otro"
+private const val IMAGEN_SIN_EMERGENCIA = "hosp_sin_emergencia"
+
+// Propiedades de cada punto del GeoJSON, leidas por las capas con get(...)
+private const val PROP_ICONO = "icono"
+private const val PROP_INDICE = "indice"
+private const val PROP_ORDEN = "orden"
+private const val PROP_RUMBO = "rumbo"
+
+private const val COLOR_TIPO_DESCONOCIDO = "#6b7280"
+// Establecimientos sin emergencia (puestos y centros de salud I-1 a I-4):
+// gris y mas chicos, para que no compitan con los destinos de ambulancia.
+private const val COLOR_SIN_EMERGENCIA = "#9ca3af"
+private const val TAMANO_HOSPITAL_DP = 34
+private const val TAMANO_SIN_EMERGENCIA_DP = 22
+
+// Ruta: azul primario del tema (Figma) con borde mas oscuro; de noche se
+// aclara para que resalte sobre el mapa oscuro.
+private const val COLOR_RUTA_DIA = "#004790"
+private const val COLOR_RUTA_BORDE_DIA = "#001E45"
+private const val COLOR_RUTA_NOCHE = "#8AB8FF"
+private const val COLOR_RUTA_BORDE_NOCHE = "#0B2B5C"
+
+private const val ZOOM_INICIAL = 13.0
+private const val ZOOM_NAVEGACION = 17.0
+private const val INCLINACION_NAVEGACION = 55.0
+
+// Lo que tarda la ambulancia (y la camara que la sigue) en deslizarse de una
+// posicion GPS a la siguiente.
+private const val DURACION_MOVIMIENTO_MS = 900
+private const val DURACION_CAMBIO_CAMARA_MS = 1000
+
+// Un cambio de posicion mas grande que esto no es "avanzar": es un salto
+// (primer fix del GPS, tocar el mapa lejos) y se aplica sin animar.
+private const val SALTO_SIN_ANIMAR_M = 500.0
+
+// La camara del mapa sobrevive a que el composable salga de pantalla (cambiar
+// de pestana recrea el MapView): al volver se retoma donde estaba.
+private var camaraGuardada: CameraPosition? = null
+
+/**
+ * Todo lo imperativo de MapLibre en un solo lugar: estilo, imagenes, fuentes
+ * GeoJSON, capas, animacion de la ambulancia y camara. El composable
+ * [MapaApio] solo crea el MapView, respeta su ciclo de vida y llama a
+ * [actualizar] con el estado mas reciente; aqui se compara con lo ya dibujado
+ * y se toca el mapa solo en lo que cambio (nunca se recrea el MapView).
+ *
+ * Se usan fuentes y capas del estilo (no la API vieja de Marker): es lo que
+ * permite rotar la ambulancia, acostarla sobre el mapa inclinado y dibujar
+ * cientos de establecimientos sin un objeto por cada uno.
+ */
+internal class ControladorMapa(
+    private val mapView: MapView,
+    origenInicial: LatLon,
+    rumboInicial: Float,
+    private var oscuro: Boolean,
+) {
+    private val contexto = mapView.context
+    private val densidad = contexto.resources.displayMetrics.density
+
+    var alTocarMapa: (LatLon) -> Unit = {}
+    var alTocarHospital: (Hospital) -> Unit = {}
+    var alMoverCamaraConElDedo: () -> Unit = {}
+
+    private var mapa: MapLibreMap? = null
+    private var destruido = false
+
+    // Fuentes del estilo actual; null mientras el estilo carga (o se recarga
+    // al cambiar entre dia y noche).
+    private var fuenteRuta: GeoJsonSource? = null
+    private var fuenteHospitales: GeoJsonSource? = null
+    private var fuenteAmbulancia: GeoJsonSource? = null
+
+    // Ultimo estado pedido por la UI
+    private var hospitales: List<Hospital> = emptyList()
+    private var ruta: List<LatLon> = emptyList()
+    private var modoNavegacion = false
+    private var siguiendoCamara = true
+    private var margenInferiorPx = 0
+
+    // Ambulancia: donde esta dibujada ahora (se anima) y hacia donde va
+    private var posicionDibujada = origenInicial
+    private var rumboDibujado = rumboInicial
+    private var posicionObjetivo = origenInicial
+    private var rumboObjetivo = rumboInicial
+    private var animador: ValueAnimator? = null
+
+    init {
+        mapView.getMapAsync { mapaListo ->
+            if (destruido) return@getMapAsync
+            mapa = mapaListo
+            configurarMapa(mapaListo)
+            cargarEstilo()
+            // actualizar() pudo haber pedido el modo navegacion antes de que
+            // el mapa existiera: se aplica ahora, sin animacion.
+            if (modoNavegacion && siguiendoCamara) camaraDeNavegacion(0, suave = false)
+        }
+    }
+
+    // ---------------------------------------------------------- Entrada
+
+    /** Lleva el mapa al estado que pide la UI. Se llama en cada recomposicion. */
+    fun actualizar(
+        origen: LatLon,
+        rumbo: Float,
+        hospitales: List<Hospital>,
+        ruta: List<LatLon>,
+        modoNavegacion: Boolean,
+        siguiendoCamara: Boolean,
+        oscuro: Boolean,
+        margenInferiorPx: Int,
+    ) {
+        if (destruido) return
+
+        if (oscuro != this.oscuro) {
+            this.oscuro = oscuro
+            cargarEstilo()
+        }
+
+        if (hospitales != this.hospitales) {
+            this.hospitales = hospitales
+            pintarHospitales()
+        }
+
+        // Un destino nuevo se reconoce por el ultimo punto de la ruta; los
+        // recalculos por avance del GPS cambian el inicio, no el final.
+        val destinoNuevo = ruta.isNotEmpty() && ruta.last() != this.ruta.lastOrNull()
+        if (ruta != this.ruta) {
+            this.ruta = ruta
+            pintarRuta()
+        }
+
+        val entroANavegar = modoNavegacion && !this.modoNavegacion
+        val salioDeNavegar = !modoNavegacion && this.modoNavegacion
+        val retomoSeguimiento = siguiendoCamara && !this.siguiendoCamara
+        this.modoNavegacion = modoNavegacion
+        this.siguiendoCamara = siguiendoCamara
+        this.margenInferiorPx = margenInferiorPx
+
+        moverAmbulancia(origen, rumbo)
+
+        when {
+            modoNavegacion && siguiendoCamara && (entroANavegar || retomoSeguimiento) ->
+                camaraDeNavegacion(DURACION_CAMBIO_CAMARA_MS, suave = true)
+            salioDeNavegar -> if (ruta.size >= 2) encuadrarRuta() else camaraPlana()
+            !modoNavegacion && destinoNuevo -> encuadrarRuta()
+        }
+    }
+
+    /** Suelta animaciones y recuerda la camara. El MapView lo destruye [MapaApio]. */
+    fun destruir() {
+        destruido = true
+        animador?.cancel()
+        animador = null
+        mapa?.let { camaraGuardada = it.cameraPosition }
+        mapa = null
+        fuenteRuta = null
+        fuenteHospitales = null
+        fuenteAmbulancia = null
+    }
+
+    // ---------------------------------------------------------- Mapa y estilo
+
+    private fun configurarMapa(mapa: MapLibreMap) {
+        mapa.uiSettings.apply {
+            isCompassEnabled = false
+            isLogoEnabled = false
+            // La atribucion (MapTiler / OpenStreetMap) es obligatoria; va al
+            // costado para que no la tapen el buscador ni la hoja de ruta.
+            isAttributionEnabled = true
+            attributionGravity = Gravity.START or Gravity.CENTER_VERTICAL
+            val margen = (8 * densidad).toInt()
+            setAttributionMargins(margen, 0, 0, 0)
+        }
+
+        val guardada = camaraGuardada
+        mapa.cameraPosition = if (guardada != null) {
+            // se retoma plana: si corresponde, actualizar() vuelve a inclinarla
+            CameraPosition.Builder(guardada).tilt(0.0).bearing(0.0).padding(0.0, 0.0, 0.0, 0.0).build()
+        } else {
+            CameraPosition.Builder().target(posicionDibujada.aLatLng()).zoom(ZOOM_INICIAL).build()
+        }
+
+        mapa.addOnMapClickListener { punto ->
+            val pantalla = mapa.projection.toScreenLocation(punto)
+            // area de toque generosa: se maneja con el dedo, no con mouse
+            val radio = 16 * densidad
+            val zona = RectF(pantalla.x - radio, pantalla.y - radio, pantalla.x + radio, pantalla.y + radio)
+            val hospital = mapa.queryRenderedFeatures(zona, CAPA_HOSPITALES)
+                .filter { it.hasNonNullValueForProperty(PROP_INDICE) }
+                // si hay varios encimados gana el que tiene emergencia
+                .maxByOrNull { if (it.hasNonNullValueForProperty(PROP_ORDEN)) it.getNumberProperty(PROP_ORDEN).toInt() else 0 }
+                ?.let { hospitales.getOrNull(it.getNumberProperty(PROP_INDICE).toInt()) }
+            if (hospital != null) {
+                alTocarHospital(hospital)
+            } else {
+                alTocarMapa(LatLon(punto.latitude, punto.longitude))
+            }
+            true
+        }
+
+        // Si el usuario arrastra el mapa, la UI deja de seguir a la ambulancia
+        // y muestra el boton "Recentrar" (igual que Google Maps).
+        mapa.addOnCameraMoveStartedListener { motivo ->
+            if (motivo == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                alMoverCamaraConElDedo()
+            }
+        }
+    }
+
+    /**
+     * Carga el estilo de dia o de noche. setStyle borra todo lo agregado al
+     * estilo anterior (imagenes, fuentes, capas), asi que se reconstruye
+     * completo en el callback.
+     */
+    private fun cargarEstilo() {
+        val mapa = mapa ?: return
+        fuenteRuta = null
+        fuenteHospitales = null
+        fuenteAmbulancia = null
+        val oscuroPedido = oscuro
+        mapa.setStyle(Style.Builder().fromUri(ConfigMapa.urlEstilo(oscuroPedido))) { estilo ->
+            // si mientras cargaba se cambio otra vez de tema, este ya no sirve
+            if (destruido || oscuroPedido != oscuro) return@setStyle
+            agregarImagenes(estilo)
+            agregarFuentesYCapas(estilo, oscuroPedido)
+            pintarRuta()
+            pintarHospitales()
+            pintarAmbulancia()
+        }
+    }
+
+    private fun agregarImagenes(estilo: Style) {
+        estilo.addImage(IMAGEN_AMBULANCIA, crearBitmapAmbulancia(contexto))
+        // Un icono por tipo de establecimiento, compartido por todos los puntos
+        COLOR_POR_TIPO.forEach { (tipo, color) ->
+            estilo.addImage("hosp_$tipo", crearBitmapCircular(contexto, "🏥", color, TAMANO_HOSPITAL_DP))
+        }
+        if (!COLOR_POR_TIPO.containsKey("Otro")) {
+            estilo.addImage(
+                IMAGEN_HOSPITAL_OTRO,
+                crearBitmapCircular(contexto, "🏥", COLOR_TIPO_DESCONOCIDO, TAMANO_HOSPITAL_DP),
+            )
+        }
+        estilo.addImage(
+            IMAGEN_SIN_EMERGENCIA,
+            crearBitmapCircular(contexto, "🏥", COLOR_SIN_EMERGENCIA, TAMANO_SIN_EMERGENCIA_DP),
+        )
+    }
+
+    private fun agregarFuentesYCapas(estilo: Style, oscuro: Boolean) {
+        val ruta = GeoJsonSource(FUENTE_RUTA)
+        val hospitales = GeoJsonSource(FUENTE_HOSPITALES)
+        val ambulancia = GeoJsonSource(FUENTE_AMBULANCIA)
+        estilo.addSource(ruta)
+        estilo.addSource(hospitales)
+        estilo.addSource(ambulancia)
+
+        // El orden en que se agregan es el orden de dibujo: ruta abajo,
+        // hospitales encima y la ambulancia siempre arriba de todo.
+        estilo.addLayer(
+            LineLayer(CAPA_RUTA_BORDE, FUENTE_RUTA).withProperties(
+                PropertyFactory.lineColor(if (oscuro) COLOR_RUTA_BORDE_NOCHE else COLOR_RUTA_BORDE_DIA),
+                PropertyFactory.lineWidth(10f),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+        estilo.addLayer(
+            LineLayer(CAPA_RUTA_LINEA, FUENTE_RUTA).withProperties(
+                PropertyFactory.lineColor(if (oscuro) COLOR_RUTA_NOCHE else COLOR_RUTA_DIA),
+                PropertyFactory.lineWidth(6f),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+        estilo.addLayer(
+            SymbolLayer(CAPA_HOSPITALES, FUENTE_HOSPITALES).withProperties(
+                PropertyFactory.iconImage(Expression.get(PROP_ICONO)),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.iconIgnorePlacement(true),
+                // los que tienen emergencia se dibujan encima de los grises
+                PropertyFactory.symbolSortKey(Expression.get(PROP_ORDEN)),
+            ),
+        )
+        estilo.addLayer(
+            SymbolLayer(CAPA_AMBULANCIA, FUENTE_AMBULANCIA).withProperties(
+                PropertyFactory.iconImage(IMAGEN_AMBULANCIA),
+                PropertyFactory.iconRotate(Expression.get(PROP_RUMBO)),
+                // "map" en las dos: la imagen rota con el mapa (no con la
+                // pantalla) y se acuesta sobre la calle cuando la camara se
+                // inclina; ese es el efecto de falso 3D.
+                PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.iconIgnorePlacement(true),
+            ),
+        )
+
+        fuenteRuta = ruta
+        fuenteHospitales = hospitales
+        fuenteAmbulancia = ambulancia
+    }
+
+    // ---------------------------------------------------------- Datos
+
+    private fun pintarRuta() {
+        val fuente = fuenteRuta ?: return
+        if (ruta.size < 2) {
+            fuente.setGeoJson(FeatureCollection.fromFeatures(emptyList<Feature>()))
+        } else {
+            fuente.setGeoJson(LineString.fromLngLats(ruta.map { Point.fromLngLat(it.lon, it.lat) }))
+        }
+    }
+
+    private fun pintarHospitales() {
+        val fuente = fuenteHospitales ?: return
+        val puntos = hospitales.mapIndexed { indice, hospital ->
+            Feature.fromGeometry(Point.fromLngLat(hospital.posicion.lon, hospital.posicion.lat)).apply {
+                addStringProperty(PROP_ICONO, hospital.imagen())
+                // el indice permite saber que hospital se toco sin buscarlo por nombre
+                addNumberProperty(PROP_INDICE, indice)
+                addNumberProperty(PROP_ORDEN, if (hospital.emergencia) 1 else 0)
+            }
+        }
+        fuente.setGeoJson(FeatureCollection.fromFeatures(puntos))
+    }
+
+    private fun Hospital.imagen(): String = when {
+        !emergencia -> IMAGEN_SIN_EMERGENCIA
+        COLOR_POR_TIPO.containsKey(tipo) -> "hosp_$tipo"
+        else -> IMAGEN_HOSPITAL_OTRO
+    }
+
+    private fun pintarAmbulancia() {
+        val fuente = fuenteAmbulancia ?: return
+        val punto = Feature.fromGeometry(Point.fromLngLat(posicionDibujada.lon, posicionDibujada.lat))
+        punto.addNumberProperty(PROP_RUMBO, rumboDibujado)
+        fuente.setGeoJson(punto)
+    }
+
+    // ---------------------------------------------------------- Ambulancia
+
+    /**
+     * Desliza la ambulancia hasta la nueva posicion en vez de teletransportarla,
+     * girando por el lado mas corto (ver [interpolarRumbo]). Solo hay animacion
+     * corriendo mientras hay movimiento: quieta, el mapa no gasta bateria.
+     */
+    private fun moverAmbulancia(destino: LatLon, rumboDestino: Float) {
+        if (destino == posicionObjetivo && rumboDestino == rumboObjetivo) return
+        posicionObjetivo = destino
+        rumboObjetivo = rumboDestino
+        animador?.cancel()
+        animador = null
+
+        val desde = posicionDibujada
+        val rumboDesde = rumboDibujado
+        val salto = distanciaLineaRectaM(desde, destino)
+
+        if (mapa == null || salto > SALTO_SIN_ANIMAR_M) {
+            posicionDibujada = destino
+            rumboDibujado = rumboDestino
+            pintarAmbulancia()
+            if (modoNavegacion && siguiendoCamara) {
+                camaraDeNavegacion(DURACION_CAMBIO_CAMARA_MS, suave = true)
+            } else if (!modoNavegacion) {
+                centrarSiQuedoFueraDeVista(destino)
+            }
+            return
+        }
+
+        animador = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = DURACION_MOVIMIENTO_MS.toLong()
+            interpolator = LinearInterpolator()
+            addUpdateListener { animacion ->
+                val t = animacion.animatedValue as Float
+                posicionDibujada = LatLon(
+                    desde.lat + (destino.lat - desde.lat) * t,
+                    desde.lon + (destino.lon - desde.lon) * t,
+                )
+                rumboDibujado = interpolarRumbo(rumboDesde, rumboDestino, t)
+                pintarAmbulancia()
+            }
+            start()
+        }
+        // La camara viaja con la misma duracion y sin aceleracion, para ir
+        // pegada a la ambulancia durante todo el tramo.
+        if (modoNavegacion && siguiendoCamara) {
+            camaraDeNavegacion(DURACION_MOVIMIENTO_MS, suave = false)
+        }
+    }
+
+    // ---------------------------------------------------------- Camara
+
+    /** Margen inferior tapado por la hoja de ruta, acotado para no comerse el mapa. */
+    private fun margenInferior(): Int = margenInferiorPx.coerceIn(0, (mapView.height * 0.45f).toInt())
+
+    /**
+     * Camara tipo Google Maps: cerca, inclinada, mirando hacia donde avanza la
+     * ambulancia. El margen superior empuja el centro hacia abajo, de modo que
+     * la ambulancia queda en el tercio inferior y se ve mas calle por delante.
+     */
+    private fun camaraDeNavegacion(duracionMs: Int, suave: Boolean) {
+        val mapa = mapa ?: return
+        val abajo = margenInferior()
+        val arriba = ((mapView.height - abajo) * 0.36f).toInt().coerceAtLeast(0)
+        val posicion = CameraPosition.Builder()
+            .target(posicionObjetivo.aLatLng())
+            .zoom(ZOOM_NAVEGACION)
+            .tilt(INCLINACION_NAVEGACION)
+            .bearing(rumboObjetivo.toDouble())
+            .padding(0.0, arriba.toDouble(), 0.0, abajo.toDouble())
+            .build()
+        mapa.easeCamera(CameraUpdateFactory.newCameraPosition(posicion), duracionMs, suave)
+    }
+
+    /** Vista de planificacion: plana, norte arriba, con la ruta completa a la vista. */
+    private fun encuadrarRuta() {
+        val mapa = mapa ?: return
+        if (ruta.size < 2 || mapView.width == 0 || mapView.height == 0) return
+        val limites = LatLngBounds.Builder()
+            .includes(ruta.map { it.aLatLng() })
+            .include(posicionObjetivo.aLatLng())
+            .build()
+        val costado = (48 * densidad).toInt()
+        // arriba estan el buscador y los filtros; abajo, la hoja de ruta
+        val arriba = (150 * densidad).toInt()
+        val abajo = margenInferior() + (32 * densidad).toInt()
+        mapa.easeCamera(
+            CameraUpdateFactory.newLatLngBounds(limites, 0.0, 0.0, costado, arriba, costado, abajo),
+            DURACION_CAMBIO_CAMARA_MS,
+        )
+    }
+
+    private fun camaraPlana() {
+        val mapa = mapa ?: return
+        val posicion = CameraPosition.Builder(mapa.cameraPosition)
+            .tilt(0.0)
+            .bearing(0.0)
+            .padding(0.0, 0.0, 0.0, 0.0)
+            .build()
+        mapa.easeCamera(CameraUpdateFactory.newCameraPosition(posicion), DURACION_CAMBIO_CAMARA_MS)
+    }
+
+    /** Tras un salto (ej. primer fix del GPS) la ambulancia puede quedar fuera de pantalla. */
+    private fun centrarSiQuedoFueraDeVista(punto: LatLon) {
+        val mapa = mapa ?: return
+        val destino = punto.aLatLng()
+        if (mapa.projection.visibleRegion.latLngBounds.contains(destino)) return
+        mapa.easeCamera(CameraUpdateFactory.newLatLng(destino), DURACION_CAMBIO_CAMARA_MS)
+    }
+}
+
+private fun LatLon.aLatLng() = LatLng(lat, lon)
