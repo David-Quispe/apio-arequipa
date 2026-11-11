@@ -17,7 +17,9 @@ import pe.apio.mobile.modelo.AvenidaTrafico
 import pe.apio.mobile.modelo.HOSPITALES
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
+import pe.apio.mobile.modelo.Traslado
 import pe.apio.mobile.ui.EstadoPantalla
+import pe.apio.mobile.ui.EstadoRuta
 
 // Cerro Colorado, zona de origen del corredor (mismo punto que
 // ORIGEN_INICIAL en frontend/src/App.jsx).
@@ -37,6 +39,7 @@ data class MapaUiState(
     val trafico: List<AvenidaTrafico> = emptyList(),
     val riesgo: EvaluacionRiesgo? = null,
     val recomendacion: EstadoRecomendacion? = null,
+    val historial: List<Traslado> = emptyList(),
 )
 
 /** Estado de la recomendacion del LLM (Gemini, via backend). Si no esta
@@ -80,12 +83,12 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            try {
-                repositorio.sincronizarHospitalesCache(_uiState.value.hospitales)
-            } catch (_: Exception) {
-                // best-effort: si el cache falla, HOSPITALES ya esta en uiState
-            }
+            // RENIPRESS + OSM desde el backend, con respaldo en cache y en la
+            // lista local HOSPITALES (que ya esta en uiState mientras carga)
+            val hospitales = repositorio.obtenerHospitales()
+            _uiState.update { it.copy(hospitales = hospitales) }
         }
+        viewModelScope.launch { recargarHistorial() }
         iniciarSondeo()
     }
 
@@ -101,6 +104,7 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
                 val ruta = repositorio.obtenerRuta(origen, hospital)
                 _uiState.update { it.copy(estado = EstadoPantalla.Exito(ruta)).conRiesgoRecalculado() }
                 revisarRecomendacion()
+                registrarEnHistorial(ruta)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -128,6 +132,34 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
         rutaJob?.cancel()
         reiniciarRecomendacion()
         _uiState.update { it.copy(estado = EstadoPantalla.Vacio, riesgo = null, recomendacion = null) }
+    }
+
+    // ---- Historial de traslados ----
+
+    /** Cada ruta elegida por el usuario queda como un traslado en el
+     * historial local (no los refrescos automaticos de 25 s). */
+    private fun registrarEnHistorial(ruta: EstadoRuta) {
+        viewModelScope.launch {
+            try {
+                repositorio.registrarTraslado(ruta)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // best-effort: un fallo del historial no afecta la ruta
+            }
+            recargarHistorial()
+        }
+    }
+
+    private suspend fun recargarHistorial() {
+        try {
+            val historial = repositorio.obtenerHistorial()
+            _uiState.update { it.copy(historial = historial) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // sin cache disponible: el historial queda vacio
+        }
     }
 
     // ---- Recomendacion del LLM ----

@@ -14,6 +14,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import pe.apio.mobile.modelo.ErrorResponse
+import pe.apio.mobile.modelo.EstablecimientosResponse
 import pe.apio.mobile.modelo.RecomendacionRequest
 import pe.apio.mobile.modelo.RecomendacionResponse
 import pe.apio.mobile.modelo.RouteResponse
@@ -52,6 +53,11 @@ class ApioApiClient(private val baseUrl: String) {
 
     suspend fun obtenerTrafico(): TrafficResponse = manejarErrores {
         client.get("$baseUrl/traffic").body()
+    }
+
+    /** Todos los establecimientos de salud de Arequipa (RENIPRESS + OSM). */
+    suspend fun obtenerEstablecimientos(): EstablecimientosResponse = manejarErrores {
+        client.get("$baseUrl/establecimientos").body()
     }
 
     /** Recomendacion del LLM (Gemini) generada en el backend: la API key

@@ -4,6 +4,7 @@ import pe.apio.mobile.ia.EvaluacionRiesgo
 import pe.apio.mobile.ia.NivelRiesgo
 import pe.apio.mobile.modelo.AvenidaTrafico
 import pe.apio.mobile.modelo.Especificos
+import pe.apio.mobile.modelo.EstablecimientoDto
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
 import pe.apio.mobile.modelo.PrivilegioCruzado
@@ -37,6 +38,39 @@ class ApioRepositoryTest {
     )
 
     private val riesgo = EvaluacionRiesgo(nivel = NivelRiesgo.MEDIO, mensaje = "Riesgo medio", puntaje = 0.48)
+
+    @Test
+    fun establecimiento_del_backend_se_convierte_en_hospital() {
+        val hospital = aHospital(
+            EstablecimientoDto(
+                codigo = "00012345",
+                nombre = "Hospital Goyeneche",
+                tipo = "MINSA",
+                categoria = "II-2",
+                emergencia = true,
+                distrito = "Arequipa",
+                lat = -16.40,
+                lon = -71.52,
+            ),
+        )
+
+        assertEquals("00012345", hospital.codigo)
+        assertEquals("II-2", hospital.categoria)
+        assertEquals(true, hospital.emergencia)
+        assertEquals(-16.40, hospital.posicion.lat)
+        assertEquals(-71.52, hospital.posicion.lon)
+    }
+
+    @Test
+    fun traslado_guarda_destino_tiempos_y_el_privilegio_de_mayor_puntaje() {
+        val traslado = construirTraslado(ruta, fechaMs = 1_000L)
+
+        assertEquals("Hospital Honorio Delgado", traslado.destino)
+        assertEquals("MINSA", traslado.tipoDestino)
+        assertEquals(1_000L, traslado.fechaMs)
+        assertEquals(1020.0, traslado.tiempoSConTrafico)
+        assertEquals("carril_exclusivo", traslado.privilegioPrincipal)
+    }
 
     @Test
     fun usa_el_nivel_de_trafico_real_para_cada_avenida_de_la_ruta() {

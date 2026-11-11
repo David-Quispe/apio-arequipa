@@ -31,6 +31,10 @@ val COLOR_POR_TIPO = mapOf(
     "MINSA" to "#2563eb",
     "EsSalud" to "#059669",
     "Privada" to "#7c3aed",
+    "FFAA/PNP" to "#0f766e",
+    "Municipal" to "#b45309",
+    "Otro" to "#6b7280",
 )
 
-const val COLOR_AMBULANCIA = "#111827"
+// Marcador de la ambulancia con el azul primario del diseno de Figma.
+const val COLOR_AMBULANCIA = "#004790"

@@ -22,10 +22,16 @@ class ApioSqliteHelper(context: Context) : SQLiteOpenHelper(context, NOMBRE_BD, 
         db.execSQL(
             """
             CREATE TABLE $TABLA_HOSPITALES (
-                nombre TEXT PRIMARY KEY NOT NULL,
+                clave TEXT PRIMARY KEY NOT NULL,
+                nombre TEXT NOT NULL,
                 tipo TEXT NOT NULL,
                 lat REAL NOT NULL,
-                lon REAL NOT NULL
+                lon REAL NOT NULL,
+                codigo TEXT,
+                categoria TEXT,
+                emergencia INTEGER NOT NULL DEFAULT 1,
+                distrito TEXT,
+                telefono TEXT
             )
             """.trimIndent(),
         )
@@ -44,18 +50,36 @@ class ApioSqliteHelper(context: Context) : SQLiteOpenHelper(context, NOMBRE_BD, 
             )
             """.trimIndent(),
         )
+        db.execSQL(
+            """
+            CREATE TABLE $TABLA_TRASLADOS (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                destino TEXT NOT NULL,
+                tipo_destino TEXT NOT NULL,
+                fecha_ms INTEGER NOT NULL,
+                distancia_m REAL NOT NULL,
+                tiempo_s REAL NOT NULL,
+                tiempo_s_con_trafico REAL NOT NULL,
+                privilegio_principal TEXT
+            )
+            """.trimIndent(),
+        )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         db.execSQL("DROP TABLE IF EXISTS $TABLA_HOSPITALES")
         db.execSQL("DROP TABLE IF EXISTS $TABLA_ULTIMA_RUTA")
+        db.execSQL("DROP TABLE IF EXISTS $TABLA_TRASLADOS")
         onCreate(db)
     }
 
     companion object {
         private const val NOMBRE_BD = "apio.db"
-        private const val VERSION_BD = 1
+        // v2: tabla de traslados para el historial
+        // v3: hospitales con datos de RENIPRESS (codigo, categoria, emergencia...)
+        private const val VERSION_BD = 3
         const val TABLA_HOSPITALES = "hospitales"
         const val TABLA_ULTIMA_RUTA = "ultima_ruta"
+        const val TABLA_TRASLADOS = "traslados"
     }
 }

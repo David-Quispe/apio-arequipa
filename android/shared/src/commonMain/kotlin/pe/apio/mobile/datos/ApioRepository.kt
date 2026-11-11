@@ -3,13 +3,18 @@ package pe.apio.mobile.datos
 import pe.apio.mobile.ia.EvaluacionRiesgo
 import pe.apio.mobile.modelo.AvenidaNivel
 import pe.apio.mobile.modelo.AvenidaTrafico
+import pe.apio.mobile.modelo.EstablecimientoDto
+import pe.apio.mobile.modelo.HOSPITALES
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
 import pe.apio.mobile.modelo.PrivilegioRuta
 import pe.apio.mobile.modelo.RecomendacionRequest
+import pe.apio.mobile.modelo.Traslado
 import pe.apio.mobile.red.ApioApiClient
 import pe.apio.mobile.red.ApioApiException
 import pe.apio.mobile.ui.EstadoRuta
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 
 /**
  * Capa de datos del patron MVVM: el ViewModel pide aca lo que necesita y no
@@ -71,15 +76,77 @@ class ApioRepository(
         return api.obtenerRecomendacionIa(datos).texto
     }
 
-    /** Escribe el listado de hospitales en el cache local. Hoy [Hospital]
-     * sale de la constante hardcodeada HOSPITALES (no hay endpoint de red
-     * todavia), pero dejar esto conectado hace trivial el dia que haya uno. */
-    suspend fun sincronizarHospitalesCache(hospitales: List<Hospital>) {
-        cache?.guardarHospitales(hospitales)
+    /** Guarda en el historial local un traslado por cada ruta calculada. */
+    @OptIn(ExperimentalTime::class)
+    suspend fun registrarTraslado(ruta: EstadoRuta) {
+        cache?.registrarTraslado(
+            construirTraslado(ruta, fechaMs = Clock.System.now().toEpochMilliseconds()),
+        )
+    }
+
+    /** Ultimos traslados, del mas nuevo al mas viejo (vacio si no hay cache). */
+    suspend fun obtenerHistorial(): List<Traslado> = cache?.obtenerTraslados(LIMITE_HISTORIAL) ?: emptyList()
+
+    /**
+     * Establecimientos de salud de Arequipa: primero del backend
+     * (/api/establecimientos, RENIPRESS + OSM) y se guardan en el cache
+     * local; si no hay red, la ultima lista guardada; y si nunca se
+     * descargo, la lista fija [HOSPITALES] para que la app siga usable.
+     */
+    suspend fun obtenerHospitales(): List<Hospital> {
+        try {
+            val remotos = api.obtenerEstablecimientos().establecimientos.map(::aHospital)
+            if (remotos.isNotEmpty()) {
+                try {
+                    cache?.guardarHospitales(remotos)
+                } catch (_: Exception) {
+                    // best-effort: la lista ya llego, el cache es secundario
+                }
+                return remotos
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // sin red o backend sin datos: se usa el respaldo local
+        }
+        val cacheados = try {
+            cache?.obtenerHospitalesCache().orEmpty()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return cacheados.ifEmpty { HOSPITALES }
     }
 
     fun cerrar() = api.cerrar()
 }
+
+private const val LIMITE_HISTORIAL = 50
+
+/** DTO del backend -> modelo de la app. */
+internal fun aHospital(dto: EstablecimientoDto): Hospital = Hospital(
+    nombre = dto.nombre,
+    tipo = dto.tipo,
+    posicion = LatLon(dto.lat, dto.lon),
+    codigo = dto.codigo,
+    categoria = dto.categoria,
+    emergencia = dto.emergencia,
+    distrito = dto.distrito,
+    telefono = dto.telefono,
+)
+
+/** Convierte una ruta calculada en el registro de historial. El privilegio
+ * principal es el de mayor puntaje de la ruta (el que mas ayuda a llegar). */
+internal fun construirTraslado(ruta: EstadoRuta, fechaMs: Long): Traslado = Traslado(
+    destino = ruta.destino.nombre,
+    tipoDestino = ruta.destino.tipo,
+    fechaMs = fechaMs,
+    distanciaM = ruta.distanciaM,
+    tiempoS = ruta.tiempoS,
+    tiempoSConTrafico = ruta.tiempoSConTrafico,
+    privilegioPrincipal = ruta.privilegiosCruzados
+        .maxByOrNull { it.tipoPrincipalScore ?: it.general }
+        ?.tipoPrincipal,
+)
 
 /** Arma el pedido para /api/ia/recomendacion a partir de datos que la app ya
  * tiene (ruta + trafico + heuristica local). Separado de la clase para poder

@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
+import pe.apio.mobile.modelo.Traslado
 import pe.apio.mobile.ui.EstadoRuta
 
 /**
@@ -22,12 +23,21 @@ class SqliteRutaCacheStore(private val helper: ApioSqliteHelper) : RutaCacheStor
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
+            // la lista del backend reemplaza a la anterior completa (asi no
+            // quedan establecimientos dados de baja en RENIPRESS)
+            db.delete(ApioSqliteHelper.TABLA_HOSPITALES, null, null)
             hospitales.forEach { hospital ->
                 val valores = ContentValues().apply {
+                    put("clave", hospital.codigo ?: hospital.nombre)
                     put("nombre", hospital.nombre)
                     put("tipo", hospital.tipo)
                     put("lat", hospital.posicion.lat)
                     put("lon", hospital.posicion.lon)
+                    put("codigo", hospital.codigo)
+                    put("categoria", hospital.categoria)
+                    put("emergencia", if (hospital.emergencia) 1 else 0)
+                    put("distrito", hospital.distrito)
+                    put("telefono", hospital.telefono)
                 }
                 db.insertWithOnConflict(
                     ApioSqliteHelper.TABLA_HOSPITALES,
@@ -47,6 +57,10 @@ class SqliteRutaCacheStore(private val helper: ApioSqliteHelper) : RutaCacheStor
             .query(ApioSqliteHelper.TABLA_HOSPITALES, null, null, null, null, null, null)
             .use { cursor ->
                 val resultado = mutableListOf<Hospital>()
+                fun texto(columna: String): String? {
+                    val idx = cursor.getColumnIndexOrThrow(columna)
+                    return if (cursor.isNull(idx)) null else cursor.getString(idx)
+                }
                 while (cursor.moveToNext()) {
                     resultado += Hospital(
                         nombre = cursor.getString(cursor.getColumnIndexOrThrow("nombre")),
@@ -55,6 +69,11 @@ class SqliteRutaCacheStore(private val helper: ApioSqliteHelper) : RutaCacheStor
                             cursor.getDouble(cursor.getColumnIndexOrThrow("lat")),
                             cursor.getDouble(cursor.getColumnIndexOrThrow("lon")),
                         ),
+                        codigo = texto("codigo"),
+                        categoria = texto("categoria"),
+                        emergencia = cursor.getInt(cursor.getColumnIndexOrThrow("emergencia")) == 1,
+                        distrito = texto("distrito"),
+                        telefono = texto("telefono"),
                     )
                 }
                 resultado
@@ -118,6 +137,54 @@ class SqliteRutaCacheStore(private val helper: ApioSqliteHelper) : RutaCacheStor
                     }
                 },
             )
+        }
+    }
+
+    // ---- Historial de traslados ----
+
+    override suspend fun registrarTraslado(traslado: Traslado) = withContext(Dispatchers.IO) {
+        val valores = ContentValues().apply {
+            put("destino", traslado.destino)
+            put("tipo_destino", traslado.tipoDestino)
+            put("fecha_ms", traslado.fechaMs)
+            put("distancia_m", traslado.distanciaM)
+            put("tiempo_s", traslado.tiempoS)
+            put("tiempo_s_con_trafico", traslado.tiempoSConTrafico)
+            if (traslado.privilegioPrincipal != null) {
+                put("privilegio_principal", traslado.privilegioPrincipal)
+            } else {
+                putNull("privilegio_principal")
+            }
+        }
+        helper.writableDatabase.insert(ApioSqliteHelper.TABLA_TRASLADOS, null, valores)
+        Unit
+    }
+
+    override suspend fun obtenerTraslados(limite: Int): List<Traslado> = withContext(Dispatchers.IO) {
+        helper.readableDatabase.query(
+            ApioSqliteHelper.TABLA_TRASLADOS,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "fecha_ms DESC",
+            limite.toString(),
+        ).use { cursor ->
+            val resultado = mutableListOf<Traslado>()
+            val idxPrivilegio = cursor.getColumnIndexOrThrow("privilegio_principal")
+            while (cursor.moveToNext()) {
+                resultado += Traslado(
+                    destino = cursor.getString(cursor.getColumnIndexOrThrow("destino")),
+                    tipoDestino = cursor.getString(cursor.getColumnIndexOrThrow("tipo_destino")),
+                    fechaMs = cursor.getLong(cursor.getColumnIndexOrThrow("fecha_ms")),
+                    distanciaM = cursor.getDouble(cursor.getColumnIndexOrThrow("distancia_m")),
+                    tiempoS = cursor.getDouble(cursor.getColumnIndexOrThrow("tiempo_s")),
+                    tiempoSConTrafico = cursor.getDouble(cursor.getColumnIndexOrThrow("tiempo_s_con_trafico")),
+                    privilegioPrincipal = if (cursor.isNull(idxPrivilegio)) null else cursor.getString(idxPrivilegio),
+                )
+            }
+            resultado
         }
     }
 }

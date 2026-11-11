@@ -1,29 +1,35 @@
 package pe.apio.mobile
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.StateFlow
 import pe.apio.mobile.datos.ApioRepository
-import pe.apio.mobile.mapa.MapaOSM
 import pe.apio.mobile.modelo.LatLon
 import pe.apio.mobile.red.ApioApiClient
-import pe.apio.mobile.ui.EstadoPantalla
-import pe.apio.mobile.ui.PanelInfo
-import pe.apio.mobile.ui.PanelTrafico
+import pe.apio.mobile.ui.IconosApio
+import pe.apio.mobile.ui.pantallas.PantallaHistorial
+import pe.apio.mobile.ui.pantallas.PantallaHospitales
+import pe.apio.mobile.ui.pantallas.PantallaMapa
+import pe.apio.mobile.ui.pantallas.PantallaPerfil
 import pe.apio.mobile.ui.theme.ApioTheme
 import pe.apio.mobile.viewmodel.MapaViewModel
 
@@ -32,17 +38,32 @@ import pe.apio.mobile.viewmodel.MapaViewModel
 // network_security_config.xml para el permiso de trafico sin cifrar).
 private const val API_BASE_URL = "http://10.0.2.2:8000/api"
 
+/** Pestanas de la barra de navegacion inferior del diseno de Figma. */
+private enum class Pestana(val titulo: String) {
+    MAPA("Mapa"),
+    HOSPITALES("Hospitales"),
+    HISTORIAL("Historial"),
+    PERFIL("Perfil"),
+}
+
+private fun Pestana.icono(): ImageVector = when (this) {
+    Pestana.MAPA -> IconosApio.Mapa
+    Pestana.HOSPITALES -> IconosApio.Hospital
+    Pestana.HISTORIAL -> IconosApio.Historial
+    Pestana.PERFIL -> IconosApio.Persona
+}
+
 /**
  * La V del MVVM: solo dibuja [MapaViewModel.uiState] y le avisa al
- * ViewModel lo que hace el usuario. No hace red, no guarda estado propio ni
- * lanza corrutinas propias (la unica excepcion es el [LaunchedEffect] que
- * reenvia [ubicacionReal] al ViewModel, que sigue siendo solo "avisar").
+ * ViewModel lo que hace el usuario. Todas las pantallas comparten el MISMO
+ * ViewModel y el mismo estado: cambiar de pestana no recalcula nada. El
+ * unico estado propio de la vista es de interfaz pura (pestana elegida y
+ * tema oscuro), que no es logica de la app.
  *
- * [crearRepositorio] lo puede inyectar MainActivity (con el cache SQLite ya
- * conectado); por defecto crea uno sin cache, solo para que el @Preview
- * funcione sin Android real. [ubicacionReal] es la ubicacion GPS real que
- * entrega SeguimientoUbicacionServicio cuando esta prendido el "modo
- * ambulancia real" (ver MainActivity); null mientras ese modo esta apagado.
+ * [crearRepositorio] lo inyecta MainActivity (con el cache SQLite ya
+ * conectado); por defecto crea uno sin cache, solo para el @Preview.
+ * [ubicacionReal] es la ubicacion GPS que entrega SeguimientoUbicacionServicio
+ * cuando esta prendido el seguimiento real; null mientras esta apagado.
  */
 @Composable
 @Preview
@@ -54,7 +75,12 @@ fun App(
 ) {
     val viewModel = viewModel { MapaViewModel(crearRepositorio()) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val ruta = (uiState.estado as? EstadoPantalla.Exito)?.ruta
+
+    var pestana by rememberSaveable { mutableStateOf(Pestana.MAPA) }
+    val temaSistemaOscuro = isSystemInDarkTheme()
+    // null = seguir al sistema; el switch de Perfil lo fija en true/false
+    var temaOscuroElegido by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val temaOscuro = temaOscuroElegido ?: temaSistemaOscuro
 
     if (ubicacionReal != null) {
         LaunchedEffect(ubicacionReal) {
@@ -62,63 +88,61 @@ fun App(
         }
     }
 
-    ApioTheme {
-        Box(modifier = Modifier.fillMaxSize()) {
-            MapaOSM(
-                modifier = Modifier.fillMaxSize(),
-                origen = uiState.origen,
-                hospitales = uiState.hospitales,
-                rutaPuntos = ruta?.puntos ?: emptyList(),
-                onTapMapa = viewModel::moverOrigen,
-                onTapHospital = viewModel::seleccionarHospital,
-            )
-
-            PanelInfo(
-                estado = uiState.estado,
-                riesgo = uiState.riesgo,
-                recomendacion = uiState.recomendacion,
-                onDismiss = viewModel::cerrarPanel,
-                onRetry = viewModel::seleccionarHospital,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-            )
-
-            PanelTrafico(
-                avenidas = uiState.trafico,
-                avenidasRuta = ruta?.avenidasTraficoCruzadas,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(12.dp),
-            )
-
-            BotonUbicacionReal(
-                activo = ubicacionActiva,
-                onClick = onToggleUbicacion,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-            )
+    ApioTheme(oscuro = temaOscuro) {
+        Scaffold(
+            // Sin insets automaticos: el mapa va de borde a borde (debajo de
+            // la barra de estado) y cada pantalla maneja su propio margen.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                NavigationBar {
+                    Pestana.entries.forEach { opcion ->
+                        NavigationBarItem(
+                            selected = pestana == opcion,
+                            onClick = { pestana = opcion },
+                            icon = { Icon(opcion.icono(), contentDescription = null) },
+                            label = { Text(opcion.titulo) },
+                        )
+                    }
+                }
+            },
+        ) { relleno ->
+            val contenido = Modifier.fillMaxSize().padding(bottom = relleno.calculateBottomPadding())
+            when (pestana) {
+                Pestana.MAPA -> PantallaMapa(
+                    uiState = uiState,
+                    seguimientoActivo = ubicacionActiva,
+                    onToggleSeguimiento = onToggleUbicacion,
+                    onTapMapa = viewModel::moverOrigen,
+                    onTapHospital = viewModel::seleccionarHospital,
+                    onCerrarRuta = viewModel::cerrarPanel,
+                    onReintentar = viewModel::seleccionarHospital,
+                    onBuscar = { pestana = Pestana.HOSPITALES },
+                    modifier = contenido,
+                )
+                Pestana.HOSPITALES -> PantallaHospitales(
+                    hospitales = uiState.hospitales,
+                    origen = uiState.origen,
+                    estado = uiState.estado,
+                    onElegir = { hospital ->
+                        viewModel.seleccionarHospital(hospital)
+                        pestana = Pestana.MAPA
+                    },
+                    modifier = contenido.statusBarsPadding(),
+                )
+                Pestana.HISTORIAL -> PantallaHistorial(
+                    historial = uiState.historial,
+                    onNuevaEmergencia = { pestana = Pestana.HOSPITALES },
+                    modifier = contenido.statusBarsPadding(),
+                )
+                Pestana.PERFIL -> PantallaPerfil(
+                    historial = uiState.historial,
+                    temaOscuro = temaOscuro,
+                    onCambiarTemaOscuro = { temaOscuroElegido = it },
+                    seguimientoActivo = ubicacionActiva,
+                    onToggleSeguimiento = onToggleUbicacion,
+                    modifier = contenido.statusBarsPadding(),
+                )
+            }
         }
-    }
-}
-
-/** Prende/apaga el foreground service de GPS real (SeguimientoUbicacionServicio
- * en androidApp): cuando esta activo, el origen de la ambulancia deja de
- * moverse solo con el tap manual y sigue la ubicacion real del dispositivo. */
-@Composable
-private fun BotonUbicacionReal(
-    activo: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        containerColor = if (activo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-        contentColor = if (activo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-        modifier = modifier,
-    ) {
-        Text(if (activo) "GPS real: ON" else "GPS real")
     }
 }

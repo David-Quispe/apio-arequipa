@@ -53,9 +53,9 @@ mas plataformas despues sin arrastrar nada especifico de Android.
 | 1 | Control de versiones (Git, +20 commits) | Historial del repo completo; commits chicos y descriptivos |
 | 2 | Patron MVVM | `viewmodel/MapaViewModel.kt` + `datos/ApioRepository.kt`; `App.kt` solo observa `uiState` |
 | 3 | IA integrada con datos reales | LLM Google Gemini via `POST /api/ia/recomendacion` (backend) + `ia/EstimadorRiesgo.kt` — ver seccion "Criterio de IA" abajo |
-| 4 | Persistencia de datos (Room/Retrofit) | Red: Ktor (`red/ApioApiClient.kt`). Persistencia: `SQLiteOpenHelper` nativo (`androidApp/datos/`) — ver nota sobre Room abajo |
+| 4 | Persistencia de datos (Room/Retrofit) | Red: Ktor (`red/ApioApiClient.kt`). Persistencia: `SQLiteOpenHelper` nativo (`androidApp/datos/`): cache de hospitales, ultima ruta e **historial de traslados** (tabla `traslados`, pantalla Historial) — ver nota sobre Room abajo |
 | 5 | Servicios (Service de Android) | `servicio/SeguimientoUbicacionServicio.kt` — foreground service de ubicacion real |
-| 6 | UI/UX con Material 3 | `ui/theme/Theme.kt` (`ApioTheme`, paleta propia, variante oscura) + `AndroidManifest.xml` con `Theme.Apio` propio |
+| 6 | UI/UX con Material 3 | Rediseno basado en el Figma propio ([APIO - Diseno de vistas](https://www.figma.com/design/AU9vW9wMgnbdZkd7PazjX2)): 4 pantallas (`ui/pantallas/`: Mapa, Hospitales, Historial, Perfil) con `NavigationBar`, hoja de ruta inferior (`ui/PanelInfo.kt`), iconos Material Symbols (`ui/IconosApio.kt`) y `ApioTheme` con la paleta del Figma y modo oscuro conmutable desde Perfil |
 | 7 | App funcional sin errores criticos | `EstadoPantalla.Error` con reintento; sondeo y auto-refresh silenciosos (no tiran la UI abajo) |
 | 8 | Documentacion + video (3-5 min) | Este README + `GUION_VIDEO.md` |
 

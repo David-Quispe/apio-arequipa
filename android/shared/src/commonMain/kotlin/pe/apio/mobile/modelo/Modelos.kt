@@ -60,6 +60,27 @@ data class ErrorResponse(
     val detail: String,
 )
 
+// ---- /api/establecimientos (backend/app/api/routes/establecimientos.py) ----
+
+@Serializable
+data class EstablecimientoDto(
+    val codigo: String? = null,
+    val nombre: String,
+    val tipo: String = "Otro",
+    val categoria: String? = null,
+    val emergencia: Boolean = false,
+    val distrito: String? = null,
+    val telefono: String? = null,
+    val lat: Double,
+    val lon: Double,
+)
+
+@Serializable
+data class EstablecimientosResponse(
+    val total: Int = 0,
+    val establecimientos: List<EstablecimientoDto> = emptyList(),
+)
+
 // ---- /api/ia/recomendacion (backend/app/api/routes/ia.py) ----
 
 @Serializable
