@@ -39,6 +39,8 @@ import pe.apio.mobile.ia.NivelRiesgo
 import pe.apio.mobile.mapa.MapaApio
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
+import pe.apio.mobile.plataforma.MantenerPantallaEncendida
+import pe.apio.mobile.plataforma.rememberLocutor
 import pe.apio.mobile.ui.EstadoPantalla
 import pe.apio.mobile.ui.HojaRuta
 import pe.apio.mobile.ui.IconosApio
@@ -46,9 +48,11 @@ import pe.apio.mobile.viewmodel.MapaUiState
 
 // Cuanto dura en pantalla un aviso del modo conduccion antes de cerrarse solo.
 private const val DURACION_ALERTA_MS = 5_000L
+// El aviso de llegada se queda un poco mas
+private const val DURACION_LLEGADA_MS = 7_000L
 
-/** Aviso corto del modo conduccion (cambio de riesgo / trafico). */
-private data class AlertaConduccion(val texto: String, val grave: Boolean)
+/** Aviso corto del modo conduccion (cambio de riesgo / trafico / llegada). */
+private data class AlertaConduccion(val texto: String, val grave: Boolean, val llegada: Boolean = false)
 
 /** El aviso que corresponde al pasar de un nivel de riesgo a otro; null si
  * no vale la pena distraer a quien maneja. */
@@ -87,6 +91,7 @@ fun PantallaMapa(
     onBuscar: () -> Unit,
     modifier: Modifier = Modifier,
     temaOscuro: Boolean = false,
+    onLlegadaVista: () -> Unit = {},
 ) {
     val ruta = (uiState.estado as? EstadoPantalla.Exito)?.ruta
 
@@ -97,6 +102,29 @@ fun PantallaMapa(
     // el boton "Recentrar" lo devuelve a true.
     var siguiendoCamara by remember { mutableStateOf(true) }
     LaunchedEffect(modoNavegacion) { siguiendoCamara = true }
+
+    // Navegando la pantalla no se apaga y los avisos tambien se dicen en voz
+    // alta, para no tener que mirar el celular.
+    MantenerPantallaEncendida(modoNavegacion)
+    val locutor = rememberLocutor()
+    LaunchedEffect(modoNavegacion) {
+        if (modoNavegacion && ruta != null) {
+            val minutos = kotlin.math.round(ruta.tiempoSConTrafico / 60).toInt().coerceAtLeast(1)
+            locutor.decir("Ruta iniciada hacia ${ruta.destino.nombre}. Llegada estimada en $minutos minutos.")
+        }
+    }
+
+    // Llegada al hospital (la detecta el ViewModel con el GPS real): se apaga
+    // el seguimiento, se avisa y el aviso se cierra solo.
+    val llegadaA = uiState.llegadaA
+    LaunchedEffect(llegadaA) {
+        if (llegadaA != null) {
+            if (seguimientoActivo) onToggleSeguimiento()
+            locutor.decir("Llegaste a $llegadaA. Traslado terminado.")
+            delay(DURACION_LLEGADA_MS)
+            onLlegadaVista()
+        }
+    }
 
     // Alto de la hoja inferior: el mapa lo usa para no dejar la ambulancia
     // ni la ruta escondidas detras de ella.
@@ -117,7 +145,9 @@ fun PantallaMapa(
         }
     }
     LaunchedEffect(alerta) {
-        if (alerta != null) {
+        val aviso = alerta
+        if (aviso != null) {
+            locutor.decir(aviso.texto)
             delay(DURACION_ALERTA_MS)
             alerta = null
         }
@@ -149,7 +179,16 @@ fun PantallaMapa(
             onCamaraMovidaPorUsuario = { siguiendoCamara = false },
         )
 
-        if (modoNavegacion) {
+        if (llegadaA != null) {
+            TarjetaAlerta(
+                AlertaConduccion("Llegaste a $llegadaA", grave = false, llegada = true),
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxWidth(),
+            )
+        } else if (modoNavegacion) {
             // Manejando no hay buscador ni filtros: solo, cuando hace falta,
             // un aviso arriba que no tapa la ruta.
             alerta?.let { aviso ->
@@ -267,7 +306,11 @@ private fun TarjetaAlerta(alerta: AlertaConduccion, modifier: Modifier = Modifie
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                if (alerta.grave) IconosApio.Alerta else IconosApio.Trafico,
+                when {
+                    alerta.llegada -> IconosApio.Hospital
+                    alerta.grave -> IconosApio.Alerta
+                    else -> IconosApio.Trafico
+                },
                 contentDescription = null,
                 modifier = Modifier.size(24.dp),
             )

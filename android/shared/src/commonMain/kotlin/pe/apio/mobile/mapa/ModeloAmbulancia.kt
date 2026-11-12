@@ -33,7 +33,13 @@ private const val BLANCO = "#F8FAFC"
 private const val ROJO = "#DC2626"
 private const val VIDRIO = "#1E293B"
 private const val LLANTA = "#111827"
-private const val AZUL = "#2563EB"
+// Barra de luces: cada mitad alterna entre encendida y apagada (destello)
+private const val LUZ_IZQUIERDA = "luz-izquierda"
+private const val LUZ_DERECHA = "luz-derecha"
+private const val AZUL_ENCENDIDO = "#60A5FA"
+private const val AZUL_APAGADO = "#1E3A8A"
+private const val ROJO_ENCENDIDO = "#F87171"
+private const val ROJO_APAGADO = "#7F1D1D"
 
 // La ambulancia armada con bloques, de abajo hacia arriba. Las piezas de
 // color sobresalen unos centimetros de la carroceria para que no se
@@ -54,8 +60,8 @@ private val BLOQUES = listOf(
     Bloque(-1.06, 1.06, 1.00, 2.25, 1.25, 2.10, VIDRIO),
     Bloque(-1.08, 1.08, 1.00, 2.20, 2.10, 2.28, BLANCO),
     // barra de luces sobre el frente de la caja: azul y roja
-    Bloque(-0.85, -0.05, 0.45, 0.85, 2.75, 3.02, AZUL),
-    Bloque(0.05, 0.85, 0.45, 0.85, 2.75, 3.02, ROJO),
+    Bloque(-0.85, -0.05, 0.45, 0.85, 2.75, 3.02, LUZ_IZQUIERDA),
+    Bloque(0.05, 0.85, 0.45, 0.85, 2.75, 3.02, LUZ_DERECHA),
     // cruz roja en el techo
     Bloque(-0.22, 0.22, -2.45, -0.65, 2.75, 2.80, ROJO),
     Bloque(-0.80, 0.80, -1.77, -1.33, 2.75, 2.80, ROJO),
@@ -77,8 +83,16 @@ fun metrosPorPixel(latitud: Double, zoom: Double): Double =
  * mapa: como una ambulancia real (6 m) seria un punto a zoom de ciudad, el
  * mapa la pide mas grande para que siempre se vea de un tamano comodo; todo
  * el modelo (ancho y alturas) se escala en la misma proporcion.
+ *
+ * [destello] elige cual mitad de la barra de luces esta encendida: el mapa
+ * lo va alternando para que las luces parpadeen (azul / rojo).
  */
-fun modeloAmbulancia(centro: LatLon, rumbo: Float, largoM: Double): List<PiezaAmbulancia> {
+fun modeloAmbulancia(
+    centro: LatLon,
+    rumbo: Float,
+    largoM: Double,
+    destello: Boolean = false,
+): List<PiezaAmbulancia> {
     val escala = largoM / LARGO_MODELO_M
     val giro = rumbo * PI / 180
     val seno = sin(giro)
@@ -97,7 +111,11 @@ fun modeloAmbulancia(centro: LatLon, rumbo: Float, largoM: Double): List<PiezaAm
             contorno = listOf(esquina(b.x1, b.y1), esquina(b.x2, b.y1), esquina(b.x2, b.y2), esquina(b.x1, b.y2)),
             baseM = b.base * escala,
             altoM = b.alto * escala,
-            color = b.color,
+            color = when (b.color) {
+                LUZ_IZQUIERDA -> if (destello) AZUL_APAGADO else AZUL_ENCENDIDO
+                LUZ_DERECHA -> if (destello) ROJO_ENCENDIDO else ROJO_APAGADO
+                else -> b.color
+            },
         )
     }
 }

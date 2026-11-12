@@ -40,6 +40,9 @@ data class MapaUiState(
     val trafico: List<AvenidaTrafico> = emptyList(),
     val riesgo: EvaluacionRiesgo? = null,
     val recomendacion: EstadoRecomendacion? = null,
+    // Nombre del hospital al que se acaba de llegar con el GPS real; la
+    // pantalla lo anuncia y luego llama a confirmarLlegada(). null = nada.
+    val llegadaA: String? = null,
 )
 
 /** Estado de la recomendacion del LLM (Gemini, via backend). Si no esta
@@ -91,7 +94,9 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
         rutaJob?.cancel()
         origenUltimoRecalculo = _uiState.value.origen
         reiniciarRecomendacion()
-        _uiState.update { it.copy(estado = EstadoPantalla.Cargando(hospital), recomendacion = null) }
+        _uiState.update {
+            it.copy(estado = EstadoPantalla.Cargando(hospital), recomendacion = null, llegadaA = null)
+        }
         val origen = _uiState.value.origen
         rutaJob = viewModelScope.launch {
             try {
@@ -144,6 +149,30 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
             )
         }
         val exito = _uiState.value.estado as? EstadoPantalla.Exito ?: return
+
+        // Llegada: a pocos metros del hospital o del final de la ruta (la
+        // puerta por donde entra la ambulancia) el traslado se cierra solo.
+        val hospital = exito.ruta.destino
+        val finDeRuta = exito.ruta.puntos.lastOrNull() ?: hospital.posicion
+        val faltanM = minOf(
+            distanciaAproxM(nuevoOrigen, hospital.posicion),
+            distanciaAproxM(nuevoOrigen, finDeRuta),
+        )
+        if (faltanM < DISTANCIA_LLEGADA_M) {
+            rutaJob?.cancel()
+            gpsJob?.cancel()
+            reiniciarRecomendacion()
+            _uiState.update {
+                it.copy(
+                    estado = EstadoPantalla.Vacio,
+                    riesgo = null,
+                    recomendacion = null,
+                    llegadaA = hospital.nombre,
+                )
+            }
+            return
+        }
+
         val anterior = origenUltimoRecalculo
         if (anterior != null && distanciaAproxM(anterior, nuevoOrigen) < DISTANCIA_RECALCULO_M) return
         if (gpsJob?.isActive == true) return
@@ -167,6 +196,11 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
                 // sin red: la ambulancia se sigue moviendo sobre la ruta vieja
             }
         }
+    }
+
+    /** La pantalla ya mostro (y dijo) el aviso de llegada. */
+    fun confirmarLlegada() {
+        _uiState.update { it.copy(llegadaA = null) }
     }
 
     fun cerrarPanel() {
@@ -290,6 +324,9 @@ class MapaViewModel(private val repositorio: ApioRepository) : ViewModel() {
 }
 
 private const val DISTANCIA_RECALCULO_M = 40.0
+
+// A menos de esto del destino se da el traslado por terminado.
+private const val DISTANCIA_LLEGADA_M = 40.0
 
 /** Distancia aproximada en metros (equirectangular: sobra para tramos cortos). */
 private fun distanciaAproxM(a: LatLon, b: LatLon): Double {

@@ -148,6 +148,7 @@ fun App(
                     modifier = contenido,
                     // el mapa usa el estilo nocturno cuando la app esta en tema oscuro
                     temaOscuro = temaOscuro,
+                    onLlegadaVista = viewModel::confirmarLlegada,
                 )
                 Pestana.HOSPITALES -> PantallaHospitales(
                     hospitales = hospitalesState.hospitales,

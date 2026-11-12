@@ -31,6 +31,8 @@ import pe.apio.mobile.ui.distanciaLineaRectaM
 private const val FUENTE_RUTA = "ruta"
 private const val FUENTE_HOSPITALES = "hospitales"
 private const val FUENTE_AMBULANCIA = "ambulancia"
+private const val FUENTE_RECORRIDO = "ruta-recorrida"
+private const val CAPA_RECORRIDO = "ruta-recorrida-linea"
 private const val CAPA_RUTA_BORDE = "ruta-borde"
 private const val CAPA_RUTA_LINEA = "ruta-linea"
 private const val CAPA_HOSPITALES = "hospitales-capa"
@@ -68,6 +70,9 @@ private const val COLOR_RUTA_DIA = "#004790"
 private const val COLOR_RUTA_BORDE_DIA = "#001E45"
 private const val COLOR_RUTA_NOCHE = "#8AB8FF"
 private const val COLOR_RUTA_BORDE_NOCHE = "#0B2B5C"
+// Tramo ya recorrido: gris, para que no compita con lo que falta
+private const val COLOR_RECORRIDO_DIA = "#94A3B8"
+private const val COLOR_RECORRIDO_NOCHE = "#64748B"
 
 private const val ZOOM_INICIAL = 13.0
 private const val ZOOM_NAVEGACION = 17.0
@@ -81,6 +86,16 @@ private const val DURACION_CAMBIO_CAMARA_MS = 1000
 // Un cambio de posicion mas grande que esto no es "avanzar": es un salto
 // (primer fix del GPS, tocar el mapa lejos) y se aplica sin animar.
 private const val SALTO_SIN_ANIMAR_M = 500.0
+
+// Navegando, si el GPS cae a menos de esto de la ruta se dibuja la ambulancia
+// sobre la calle (el GPS tiembla unos metros). Mas lejos se respeta el GPS:
+// probablemente se salio de la ruta.
+private const val DISTANCIA_PEGAR_A_RUTA_M = 35.0
+// Separacion minima entre puntos guardados del camino recorrido
+private const val PASO_RECORRIDO_M = 3.0
+private const val MAX_PUNTOS_RECORRIDO = 3000
+// Cada cuanto alterna la barra de luces de la ambulancia 3D
+private const val INTERVALO_DESTELLO_MS = 350L
 
 // La camara del mapa sobrevive a que el composable salga de pantalla (cambiar
 // de pestana recrea el MapView): al volver se retoma donde estaba.
@@ -136,6 +151,22 @@ internal class ControladorMapa(
     private var rumboObjetivo = rumboInicial
     private var animador: ValueAnimator? = null
 
+    // Progreso sobre la ruta mientras se navega
+    private var fuenteRecorrido: GeoJsonSource? = null
+    private var proyeccion: ProyeccionRuta? = null
+    private val recorrido = mutableListOf<LatLon>()
+
+    // Parpadeo de la barra de luces (solo corre en modo navegacion)
+    private var destello = false
+    private val tareaDestello = object : Runnable {
+        override fun run() {
+            if (destruido || !modoNavegacion) return
+            destello = !destello
+            pintarAmbulancia()
+            mapView.postDelayed(this, INTERVALO_DESTELLO_MS)
+        }
+    }
+
     init {
         mapView.getMapAsync { mapaListo ->
             if (destruido) return@getMapAsync
@@ -176,10 +207,9 @@ internal class ControladorMapa(
         // Un destino nuevo se reconoce por el ultimo punto de la ruta; los
         // recalculos por avance del GPS cambian el inicio, no el final.
         val destinoNuevo = ruta.isNotEmpty() && ruta.last() != this.ruta.lastOrNull()
-        if (ruta != this.ruta) {
-            this.ruta = ruta
-            pintarRuta()
-        }
+        val rutaCambio = ruta != this.ruta
+        this.ruta = ruta
+        if (destinoNuevo) recorrido.clear()
 
         val entroANavegar = modoNavegacion && !this.modoNavegacion
         val salioDeNavegar = !modoNavegacion && this.modoNavegacion
@@ -190,7 +220,19 @@ internal class ControladorMapa(
         if (entroANavegar || salioDeNavegar) pintarAmbulancia()
         this.margenInferiorPx = margenInferiorPx
 
-        moverAmbulancia(origen, rumbo)
+        if (entroANavegar) {
+            mapView.removeCallbacks(tareaDestello)
+            mapView.postDelayed(tareaDestello, INTERVALO_DESTELLO_MS)
+        }
+        if (salioDeNavegar) mapView.removeCallbacks(tareaDestello)
+
+        // Navegando, la ambulancia va pegada a la ruta y lo recorrido se pinta gris
+        val posicion = seguirRuta(origen)
+        if (rutaCambio || entroANavegar || salioDeNavegar || (modoNavegacion && posicion != posicionObjetivo)) {
+            pintarRuta()
+        }
+
+        moverAmbulancia(posicion, rumbo)
 
         when {
             modoNavegacion && siguiendoCamara && (entroANavegar || retomoSeguimiento) ->
@@ -203,6 +245,7 @@ internal class ControladorMapa(
     /** Suelta animaciones y recuerda la camara. El MapView lo destruye [MapaApio]. */
     fun destruir() {
         destruido = true
+        mapView.removeCallbacks(tareaDestello)
         animador?.cancel()
         animador = null
         mapa?.let { camaraGuardada = it.cameraPosition }
@@ -316,6 +359,19 @@ internal class ControladorMapa(
         val hospitales = GeoJsonSource(FUENTE_HOSPITALES)
         val ambulancia = GeoJsonSource(FUENTE_AMBULANCIA)
         estilo.addSource(ruta)
+        val recorrida = GeoJsonSource(FUENTE_RECORRIDO)
+        estilo.addSource(recorrida)
+        // debajo de la ruta: el tramo ya recorrido, mas fino y en gris
+        estilo.addLayer(
+            LineLayer(CAPA_RECORRIDO, FUENTE_RECORRIDO).withProperties(
+                PropertyFactory.lineColor(if (oscuro) COLOR_RECORRIDO_NOCHE else COLOR_RECORRIDO_DIA),
+                PropertyFactory.lineWidth(6f),
+                PropertyFactory.lineOpacity(0.85f),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+        fuenteRecorrido = recorrida
         estilo.addSource(hospitales)
         estilo.addSource(ambulancia)
         val ambulancia3d = GeoJsonSource(FUENTE_AMBULANCIA_3D)
@@ -384,13 +440,42 @@ internal class ControladorMapa(
 
     // ---------------------------------------------------------- Datos
 
-    private fun pintarRuta() {
-        val fuente = fuenteRuta ?: return
-        if (ruta.size < 2) {
+    /**
+     * Ubica la posicion del GPS respecto de la ruta mientras se navega: si
+     * esta cerca la devuelve pegada a la calle, y va guardando el camino
+     * hecho. Fuera de navegacion devuelve la posicion tal cual.
+     */
+    private fun seguirRuta(origen: LatLon): LatLon {
+        if (!modoNavegacion) {
+            proyeccion = null
+            recorrido.clear()
+            return origen
+        }
+        val cercana = proyectarEnRuta(ruta, origen)?.takeIf { it.distanciaM <= DISTANCIA_PEGAR_A_RUTA_M }
+        proyeccion = cercana
+        val posicion = cercana?.punto ?: origen
+        val ultimo = recorrido.lastOrNull()
+        if (ultimo == null || distanciaLineaRectaM(ultimo, posicion) >= PASO_RECORRIDO_M) {
+            recorrido.add(posicion)
+            if (recorrido.size > MAX_PUNTOS_RECORRIDO) recorrido.removeAt(0)
+        }
+        return posicion
+    }
+
+    private fun linea(puntos: List<LatLon>, fuente: GeoJsonSource) {
+        if (puntos.size < 2) {
             fuente.setGeoJson(FeatureCollection.fromFeatures(emptyList<Feature>()))
         } else {
-            fuente.setGeoJson(LineString.fromLngLats(ruta.map { Point.fromLngLat(it.lon, it.lat) }))
+            fuente.setGeoJson(LineString.fromLngLats(puntos.map { Point.fromLngLat(it.lon, it.lat) }))
         }
+    }
+
+    /** En azul lo que falta por recorrer; en gris, lo ya recorrido. */
+    private fun pintarRuta() {
+        val fuente = fuenteRuta ?: return
+        val porRecorrer = proyeccion?.let { rutaRestante(ruta, it) } ?: ruta
+        linea(porRecorrer, fuente)
+        fuenteRecorrido?.let { linea(if (modoNavegacion) recorrido.toList() else emptyList(), it) }
     }
 
     private fun pintarHospitales() {
@@ -434,7 +519,7 @@ internal class ControladorMapa(
         val zoom = mapa.cameraPosition.zoom
         zoomModelo3d = zoom
         val largoM = LARGO_AMBULANCIA_3D_DP * densidad * metrosPorPixel(posicionDibujada.lat, zoom)
-        val piezas = modeloAmbulancia(posicionDibujada, rumboDibujado, largoM).map { pieza ->
+        val piezas = modeloAmbulancia(posicionDibujada, rumboDibujado, largoM, destello).map { pieza ->
             val anillo = pieza.contorno.map { Point.fromLngLat(it.lon, it.lat) }
             // un poligono GeoJSON se cierra repitiendo el primer punto
             Feature.fromGeometry(Polygon.fromLngLats(listOf(anillo + anillo.first()))).apply {
