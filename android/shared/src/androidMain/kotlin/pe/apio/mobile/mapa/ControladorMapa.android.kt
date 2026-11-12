@@ -12,6 +12,7 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.FillExtrusionLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -21,6 +22,7 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+import org.maplibre.geojson.Polygon
 import pe.apio.mobile.modelo.COLOR_POR_TIPO
 import pe.apio.mobile.modelo.Hospital
 import pe.apio.mobile.modelo.LatLon
@@ -33,6 +35,8 @@ private const val CAPA_RUTA_BORDE = "ruta-borde"
 private const val CAPA_RUTA_LINEA = "ruta-linea"
 private const val CAPA_HOSPITALES = "hospitales-capa"
 private const val CAPA_AMBULANCIA = "ambulancia-capa"
+private const val FUENTE_AMBULANCIA_3D = "ambulancia-3d"
+private const val CAPA_AMBULANCIA_3D = "ambulancia-3d-capa"
 
 private const val IMAGEN_AMBULANCIA = "ambulancia"
 private const val IMAGEN_HOSPITAL_OTRO = "hosp_Otro"
@@ -43,6 +47,13 @@ private const val PROP_ICONO = "icono"
 private const val PROP_INDICE = "indice"
 private const val PROP_ORDEN = "orden"
 private const val PROP_RUMBO = "rumbo"
+private const val PROP_COLOR = "color"
+private const val PROP_BASE = "base"
+private const val PROP_ALTO = "alto"
+
+// Largo en pantalla (dp) de la ambulancia 3D del modo navegacion. El modelo
+// se escala segun el zoom para medir siempre esto, como el icono de un GPS.
+private const val LARGO_AMBULANCIA_3D_DP = 58
 
 private const val COLOR_TIPO_DESCONOCIDO = "#6b7280"
 // Establecimientos sin emergencia (puestos y centros de salud I-1 a I-4):
@@ -107,6 +118,9 @@ internal class ControladorMapa(
     private var fuenteRuta: GeoJsonSource? = null
     private var fuenteHospitales: GeoJsonSource? = null
     private var fuenteAmbulancia: GeoJsonSource? = null
+    private var fuenteAmbulancia3d: GeoJsonSource? = null
+    // zoom con el que se dibujo el modelo 3D por ultima vez
+    private var zoomModelo3d = -1.0
 
     // Ultimo estado pedido por la UI
     private var hospitales: List<Hospital> = emptyList()
@@ -172,6 +186,8 @@ internal class ControladorMapa(
         val retomoSeguimiento = siguiendoCamara && !this.siguiendoCamara
         this.modoNavegacion = modoNavegacion
         this.siguiendoCamara = siguiendoCamara
+        // al entrar o salir de navegar se cambia entre el sprite plano y el modelo 3D
+        if (entroANavegar || salioDeNavegar) pintarAmbulancia()
         this.margenInferiorPx = margenInferiorPx
 
         moverAmbulancia(origen, rumbo)
@@ -194,6 +210,7 @@ internal class ControladorMapa(
         fuenteRuta = null
         fuenteHospitales = null
         fuenteAmbulancia = null
+        fuenteAmbulancia3d = null
     }
 
     // ---------------------------------------------------------- Mapa y estilo
@@ -238,6 +255,14 @@ internal class ControladorMapa(
 
         // Si el usuario arrastra el mapa, la UI deja de seguir a la ambulancia
         // y muestra el boton "Recentrar" (igual que Google Maps).
+        // El modelo 3D se mide en metros: si cambia el zoom hay que rehacerlo
+        // para que en pantalla siga del mismo tamano.
+        mapa.addOnCameraMoveListener {
+            if (modoNavegacion && kotlin.math.abs(mapa.cameraPosition.zoom - zoomModelo3d) > 0.02) {
+                pintarAmbulancia()
+            }
+        }
+
         mapa.addOnCameraMoveStartedListener { motivo ->
             if (motivo == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                 alMoverCamaraConElDedo()
@@ -255,6 +280,7 @@ internal class ControladorMapa(
         fuenteRuta = null
         fuenteHospitales = null
         fuenteAmbulancia = null
+        fuenteAmbulancia3d = null
         val oscuroPedido = oscuro
         mapa.setStyle(Style.Builder().fromUri(ConfigMapa.urlEstilo(oscuroPedido))) { estilo ->
             // si mientras cargaba se cambio otra vez de tema, este ya no sirve
@@ -292,6 +318,8 @@ internal class ControladorMapa(
         estilo.addSource(ruta)
         estilo.addSource(hospitales)
         estilo.addSource(ambulancia)
+        val ambulancia3d = GeoJsonSource(FUENTE_AMBULANCIA_3D)
+        estilo.addSource(ambulancia3d)
 
         // El orden en que se agregan es el orden de dibujo: ruta abajo,
         // hospitales encima y la ambulancia siempre arriba de todo.
@@ -334,9 +362,24 @@ internal class ControladorMapa(
             ),
         )
 
+        // Ambulancia 3D de verdad para el modo navegacion: bloques levantados
+        // del suelo (fill-extrusion), cada uno con su color y altura. Con la
+        // camara inclinada se le ven el frente, los costados y el techo.
+        estilo.addLayer(
+            FillExtrusionLayer(CAPA_AMBULANCIA_3D, FUENTE_AMBULANCIA_3D).withProperties(
+                PropertyFactory.fillExtrusionColor(Expression.toColor(Expression.get(PROP_COLOR))),
+                PropertyFactory.fillExtrusionBase(Expression.get(PROP_BASE)),
+                PropertyFactory.fillExtrusionHeight(Expression.get(PROP_ALTO)),
+                PropertyFactory.fillExtrusionOpacity(1f),
+                // sin degradado vertical: caras de color parejo, se lee mejor
+                PropertyFactory.fillExtrusionVerticalGradient(false),
+            ),
+        )
+
         fuenteRuta = ruta
         fuenteHospitales = hospitales
         fuenteAmbulancia = ambulancia
+        fuenteAmbulancia3d = ambulancia3d
     }
 
     // ---------------------------------------------------------- Datos
@@ -369,11 +412,39 @@ internal class ControladorMapa(
         else -> IMAGEN_HOSPITAL_OTRO
     }
 
+    /**
+     * Planificando (mapa plano visto desde arriba) la ambulancia es el sprite;
+     * navegando (camara inclinada) es el modelo 3D. Solo una de las dos fuentes
+     * tiene datos a la vez.
+     */
     private fun pintarAmbulancia() {
         val fuente = fuenteAmbulancia ?: return
-        val punto = Feature.fromGeometry(Point.fromLngLat(posicionDibujada.lon, posicionDibujada.lat))
-        punto.addNumberProperty(PROP_RUMBO, rumboDibujado)
-        fuente.setGeoJson(punto)
+        val fuente3d = fuenteAmbulancia3d ?: return
+        val vacio = FeatureCollection.fromFeatures(emptyList<Feature>())
+        val mapa = mapa
+        if (!modoNavegacion || mapa == null) {
+            val punto = Feature.fromGeometry(Point.fromLngLat(posicionDibujada.lon, posicionDibujada.lat))
+            punto.addNumberProperty(PROP_RUMBO, rumboDibujado)
+            fuente.setGeoJson(punto)
+            fuente3d.setGeoJson(vacio)
+            zoomModelo3d = -1.0
+            return
+        }
+
+        val zoom = mapa.cameraPosition.zoom
+        zoomModelo3d = zoom
+        val largoM = LARGO_AMBULANCIA_3D_DP * densidad * metrosPorPixel(posicionDibujada.lat, zoom)
+        val piezas = modeloAmbulancia(posicionDibujada, rumboDibujado, largoM).map { pieza ->
+            val anillo = pieza.contorno.map { Point.fromLngLat(it.lon, it.lat) }
+            // un poligono GeoJSON se cierra repitiendo el primer punto
+            Feature.fromGeometry(Polygon.fromLngLats(listOf(anillo + anillo.first()))).apply {
+                addStringProperty(PROP_COLOR, pieza.color)
+                addNumberProperty(PROP_BASE, pieza.baseM)
+                addNumberProperty(PROP_ALTO, pieza.altoM)
+            }
+        }
+        fuente3d.setGeoJson(FeatureCollection.fromFeatures(piezas))
+        fuente.setGeoJson(vacio)
     }
 
     // ---------------------------------------------------------- Ambulancia
