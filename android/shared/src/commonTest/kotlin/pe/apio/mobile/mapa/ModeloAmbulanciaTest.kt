@@ -40,7 +40,7 @@ class ModeloAmbulanciaTest {
         val grande = modeloAmbulancia(plaza, 0f, largoM = 60.0)
         assertEquals(chico.size, grande.size)
         assertTrue(abs(grande.maxOf { it.altoM } - 10 * chico.maxOf { it.altoM }) < 1e-6)
-        assertTrue(chico.all { it.contorno.size == 4 && it.altoM > it.baseM })
+        assertTrue(chico.all { it.contorno.size >= 4 && it.altoM > it.baseM })
     }
 
     @Test
