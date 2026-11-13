@@ -604,7 +604,10 @@ internal class ControladorMapa(
             .bearing(rumboObjetivo.toDouble())
             .padding(0.0, arriba.toDouble(), 0.0, abajo.toDouble())
             .build()
-        mapa.easeCamera(CameraUpdateFactory.newCameraPosition(posicion), duracionMs, suave)
+        val cambio = CameraUpdateFactory.newCameraPosition(posicion)
+        // easeCamera no acepta duracion 0 (lanza IllegalArgumentException):
+        // sin animacion se mueve la camara directo
+        if (duracionMs > 0) mapa.easeCamera(cambio, duracionMs, suave) else mapa.moveCamera(cambio)
     }
 
     /** Vista de planificacion: plana, norte arriba, con la ruta completa a la vista. */
