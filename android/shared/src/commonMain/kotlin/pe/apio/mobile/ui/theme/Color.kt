@@ -50,6 +50,12 @@ val ContenedorAltoOscuro = Color(0xFF282A2F)
 val ContenedorMasAltoOscuro = Color(0xFF33353A)
 val ContornoOscuro = Color(0xFF8C909E)
 
+// ---- Pantalla de bienvenida ----
+// Degradado de marca (no cambia con el tema): del azul vivo al azul noche,
+// pasando por el primario.
+val AzulBienvenidaArriba = Color(0xFF0A5FBD)
+val AzulBienvenidaAbajo = Color(0xFF00264F)
+
 // ---- Colores semanticos fijos ----
 // Significan lo mismo en tema claro y oscuro (fluido / moderado / pesado),
 // por eso no salen del colorScheme: se usan con transparencia sobre la

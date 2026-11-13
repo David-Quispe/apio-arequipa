@@ -1,5 +1,7 @@
 package pe.apio.mobile.ui.pantallas
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -138,6 +140,8 @@ fun PantallaHospitales(
                 esDestinoActivo = esActivo,
                 etaS = if (esActivo) etaActivoS else null,
                 onClick = { onElegir(hospital) },
+                // al filtrar o buscar, las tarjetas se reacomodan deslizandose
+                modifier = Modifier.animateItem(),
             )
         }
         if (lista.isEmpty()) {
@@ -176,7 +180,18 @@ private fun TarjetaHospital(
     esDestinoActivo: Boolean,
     etaS: Double?,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    // el cambio a "ruta activa" se tine de a poco en vez de saltar
+    val colorTarjeta by animateColorAsState(
+        targetValue = if (esDestinoActivo) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        animationSpec = tween(350),
+        label = "colorTarjeta",
+    )
     val colorTipo = if (hospital.emergencia) {
         COLOR_POR_TIPO[hospital.tipo]?.let(::colorDesdeHex) ?: MaterialTheme.colorScheme.primary
     } else {
@@ -184,15 +199,9 @@ private fun TarjetaHospital(
     }
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (esDestinoActivo) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
-        ),
+        colors = CardDefaults.cardColors(containerColor = colorTarjeta),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(

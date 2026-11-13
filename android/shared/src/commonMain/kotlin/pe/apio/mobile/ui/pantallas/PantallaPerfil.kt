@@ -1,5 +1,9 @@
 package pe.apio.mobile.ui.pantallas
 
+import kotlin.math.roundToInt
+import pe.apio.mobile.ui.HaloPulsante
+import pe.apio.mobile.ui.entradaSuave
+import pe.apio.mobile.ui.numeroAnimado
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,11 +62,21 @@ fun PantallaPerfil(
         Spacer(Modifier.height(20.dp))
 
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier.size(96.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("AMB", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimary)
+            Box(Modifier.size(136.dp), contentAlignment = Alignment.Center) {
+                // con el GPS prendido la unidad "late": se nota que esta en servicio
+                if (seguimientoActivo) {
+                    HaloPulsante(MaterialTheme.colorScheme.primary, Modifier.size(136.dp))
+                }
+                Box(
+                    Modifier.size(96.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "AMB",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
             }
             Spacer(Modifier.height(12.dp))
             Text("Unidad de ambulancia", style = MaterialTheme.typography.headlineSmall)
@@ -104,7 +118,12 @@ fun PantallaPerfil(
         Spacer(Modifier.height(20.dp))
         val promedioS = if (historial.isEmpty()) 0.0 else historial.map { it.tiempoSConTrafico }.average()
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TarjetaDato(IconosApio.Ruta, "${historial.size}", "traslados", Modifier.weight(1f))
+            TarjetaDato(
+                IconosApio.Ruta,
+                "${numeroAnimado(historial.size.toFloat()).roundToInt()}",
+                "traslados",
+                Modifier.weight(1f),
+            )
             TarjetaDato(
                 IconosApio.Historial,
                 if (historial.isEmpty()) "–" else "${minutosCortos(promedioS)} min",
@@ -120,7 +139,7 @@ fun PantallaPerfil(
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().entradaSuave(3),
         ) {
             Column {
                 FilaAjuste(IconosApio.ModoOscuro, "Tema oscuro", "Colores oscuros para turnos de noche") {
@@ -155,7 +174,7 @@ private fun TarjetaDato(icono: ImageVector, valor: String, etiqueta: String, mod
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier,
+        modifier = modifier.entradaSuave(1),
     ) {
         Column(Modifier.padding(14.dp)) {
             Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))

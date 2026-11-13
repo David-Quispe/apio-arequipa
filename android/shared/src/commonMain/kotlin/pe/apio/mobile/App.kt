@@ -1,11 +1,23 @@
 package pe.apio.mobile
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -21,11 +33,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import pe.apio.mobile.datos.ApioRepository
 import pe.apio.mobile.modelo.PosicionGps
 import pe.apio.mobile.red.ApioApiClient
 import pe.apio.mobile.ui.IconosApio
+import pe.apio.mobile.ui.pantallas.PantallaBienvenida
 import pe.apio.mobile.ui.pantallas.PantallaHistorial
 import pe.apio.mobile.ui.pantallas.PantallaHospitales
 import pe.apio.mobile.ui.pantallas.PantallaMapa
@@ -35,6 +49,9 @@ import pe.apio.mobile.viewmodel.HistorialViewModel
 import pe.apio.mobile.viewmodel.HospitalesViewModel
 import pe.apio.mobile.viewmodel.MapaViewModel
 import pe.apio.mobile.viewmodel.RepositorioHolder
+
+// Cuanto se ve la pantalla de bienvenida antes de desvanecerse.
+private const val DURACION_BIENVENIDA_MS = 2_300L
 
 // Backend desplegado en la VM de Azure (NGINX + HTTPS de Let's Encrypt,
 // dominio DuckDNS): funciona desde cualquier celular con datos o Wi-Fi.
@@ -96,6 +113,15 @@ fun App(
     var temaOscuroElegido by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val temaOscuro = temaOscuroElegido ?: temaSistemaOscuro
 
+    // La bienvenida se muestra una sola vez por apertura de la app
+    var bienvenidaVista by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!bienvenidaVista) {
+            delay(DURACION_BIENVENIDA_MS)
+            bienvenidaVista = true
+        }
+    }
+
     // al entrar a Historial o Perfil se leen los ultimos traslados de Room
     LaunchedEffect(pestana) {
         if (pestana == Pestana.HISTORIAL || pestana == Pestana.PERFIL) historialViewModel.recargar()
@@ -112,67 +138,92 @@ fun App(
     }
 
     ApioTheme(oscuro = temaOscuro) {
-        Scaffold(
-            // Sin insets automaticos: el mapa va de borde a borde (debajo de
-            // la barra de estado) y cada pantalla maneja su propio margen.
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                NavigationBar {
-                    Pestana.entries.forEach { opcion ->
-                        NavigationBarItem(
-                            selected = pestana == opcion,
-                            onClick = { pestana = opcion },
-                            icon = { Icon(opcion.icono(), contentDescription = null) },
-                            label = { Text(opcion.titulo) },
+        Box(Modifier.fillMaxSize()) {
+            Scaffold(
+                // Sin insets automaticos: el mapa va de borde a borde (debajo de
+                // la barra de estado) y cada pantalla maneja su propio margen.
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                bottomBar = {
+                    NavigationBar {
+                        Pestana.entries.forEach { opcion ->
+                            NavigationBarItem(
+                                selected = pestana == opcion,
+                                onClick = { pestana = opcion },
+                                icon = { Icon(opcion.icono(), contentDescription = null) },
+                                label = { Text(opcion.titulo) },
+                            )
+                        }
+                    }
+                },
+            ) { relleno ->
+                val contenido = Modifier.fillMaxSize().padding(bottom = relleno.calculateBottomPadding())
+                // las pantallas que no son el mapa llevan fondo propio, para
+                // tapar el mapa desde el primer cuadro de la transicion
+                val conFondo = contenido.background(MaterialTheme.colorScheme.background).statusBarsPadding()
+                // Cambio de pestana: la nueva entra subiendo un poco mientras aparece
+                AnimatedContent(
+                    targetState = pestana,
+                    modifier = Modifier.fillMaxSize(),
+                    transitionSpec = {
+                        (fadeIn(tween(260)) + slideInVertically(tween(260)) { alto -> alto / 18 }) togetherWith
+                            fadeOut(tween(120))
+                    },
+                    label = "pestanas",
+                ) { actual ->
+                    when (actual) {
+                        Pestana.MAPA -> PantallaMapa(
+                            uiState = uiState,
+                            hospitales = hospitalesState.hospitales,
+                            seguimientoActivo = ubicacionActiva,
+                            onToggleSeguimiento = onToggleUbicacion,
+                            onTapMapa = viewModel::moverOrigen,
+                            onTapHospital = viewModel::seleccionarHospital,
+                            onCerrarRuta = viewModel::cerrarPanel,
+                            onReintentar = { hospital ->
+                                // si la lista de hospitales no vino del servidor, se pide de nuevo
+                                hospitalesViewModel.recargarSiHaceFalta()
+                                viewModel.seleccionarHospital(hospital)
+                            },
+                            onBuscar = { pestana = Pestana.HOSPITALES },
+                            modifier = contenido,
+                            // el mapa usa el estilo nocturno cuando la app esta en tema oscuro
+                            temaOscuro = temaOscuro,
+                            onLlegadaVista = viewModel::confirmarLlegada,
+                        )
+                        Pestana.HOSPITALES -> PantallaHospitales(
+                            hospitales = hospitalesState.hospitales,
+                            origen = uiState.origen,
+                            estado = uiState.estado,
+                            onElegir = { hospital ->
+                                viewModel.seleccionarHospital(hospital)
+                                pestana = Pestana.MAPA
+                            },
+                            modifier = conFondo,
+                        )
+                        Pestana.HISTORIAL -> PantallaHistorial(
+                            historial = historialState.traslados,
+                            onNuevaEmergencia = { pestana = Pestana.HOSPITALES },
+                            modifier = conFondo,
+                        )
+                        Pestana.PERFIL -> PantallaPerfil(
+                            historial = historialState.traslados,
+                            temaOscuro = temaOscuro,
+                            onCambiarTemaOscuro = { temaOscuroElegido = it },
+                            seguimientoActivo = ubicacionActiva,
+                            onToggleSeguimiento = onToggleUbicacion,
+                            modifier = conFondo,
                         )
                     }
                 }
-            },
-        ) { relleno ->
-            val contenido = Modifier.fillMaxSize().padding(bottom = relleno.calculateBottomPadding())
-            when (pestana) {
-                Pestana.MAPA -> PantallaMapa(
-                    uiState = uiState,
-                    hospitales = hospitalesState.hospitales,
-                    seguimientoActivo = ubicacionActiva,
-                    onToggleSeguimiento = onToggleUbicacion,
-                    onTapMapa = viewModel::moverOrigen,
-                    onTapHospital = viewModel::seleccionarHospital,
-                    onCerrarRuta = viewModel::cerrarPanel,
-                    onReintentar = { hospital ->
-                        // si la lista de hospitales no vino del servidor, se pide de nuevo
-                        hospitalesViewModel.recargarSiHaceFalta()
-                        viewModel.seleccionarHospital(hospital)
-                    },
-                    onBuscar = { pestana = Pestana.HOSPITALES },
-                    modifier = contenido,
-                    // el mapa usa el estilo nocturno cuando la app esta en tema oscuro
-                    temaOscuro = temaOscuro,
-                    onLlegadaVista = viewModel::confirmarLlegada,
-                )
-                Pestana.HOSPITALES -> PantallaHospitales(
-                    hospitales = hospitalesState.hospitales,
-                    origen = uiState.origen,
-                    estado = uiState.estado,
-                    onElegir = { hospital ->
-                        viewModel.seleccionarHospital(hospital)
-                        pestana = Pestana.MAPA
-                    },
-                    modifier = contenido.statusBarsPadding(),
-                )
-                Pestana.HISTORIAL -> PantallaHistorial(
-                    historial = historialState.traslados,
-                    onNuevaEmergencia = { pestana = Pestana.HOSPITALES },
-                    modifier = contenido.statusBarsPadding(),
-                )
-                Pestana.PERFIL -> PantallaPerfil(
-                    historial = historialState.traslados,
-                    temaOscuro = temaOscuro,
-                    onCambiarTemaOscuro = { temaOscuroElegido = it },
-                    seguimientoActivo = ubicacionActiva,
-                    onToggleSeguimiento = onToggleUbicacion,
-                    modifier = contenido.statusBarsPadding(),
-                )
+            }
+
+            // Bienvenida: tapa la app mientras carga el mapa y se desvanece sola
+            AnimatedVisibility(
+                visible = !bienvenidaVista,
+                enter = EnterTransition.None,
+                exit = fadeOut(tween(500)) + scaleOut(tween(500), targetScale = 1.08f),
+            ) {
+                PantallaBienvenida()
             }
         }
     }

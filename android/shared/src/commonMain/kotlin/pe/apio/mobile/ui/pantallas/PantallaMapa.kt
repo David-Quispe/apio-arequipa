@@ -1,5 +1,12 @@
 package pe.apio.mobile.ui.pantallas
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -179,31 +186,42 @@ fun PantallaMapa(
             onCamaraMovidaPorUsuario = { siguiendoCamara = false },
         )
 
-        if (llegadaA != null) {
-            TarjetaAlerta(
-                AlertaConduccion("Llegaste a $llegadaA", grave = false, llegada = true),
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .fillMaxWidth(),
-            )
-        } else if (modoNavegacion) {
-            // Manejando no hay buscador ni filtros: solo, cuando hace falta,
-            // un aviso arriba que no tapa la ruta.
-            alerta?.let { aviso ->
+        // Aviso de arriba (llegada, o cambios de riesgo mientras se maneja):
+        // baja desde el borde y se va por donde vino, sin tapar la ruta.
+        val avisoArriba = when {
+            llegadaA != null -> AlertaConduccion("Llegaste a $llegadaA", grave = false, llegada = true)
+            modoNavegacion -> alerta
+            else -> null
+        }
+        // se recuerda el ultimo para que siga dibujado mientras se esconde
+        val ultimoAviso = remember { arrayOfNulls<AlertaConduccion>(1) }
+        if (avisoArriba != null) ultimoAviso[0] = avisoArriba
+        AnimatedVisibility(
+            visible = avisoArriba != null,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = slideInVertically { alto -> -alto } + fadeIn(),
+            exit = slideOutVertically { alto -> -alto } + fadeOut(),
+        ) {
+            ultimoAviso[0]?.let { aviso ->
                 TarjetaAlerta(
                     aviso,
                     Modifier
-                        .align(Alignment.TopCenter)
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                         .fillMaxWidth(),
                 )
             }
-        } else Column(
+        }
+
+        // Buscador y filtros: se esconden al manejar (menos distraccion)
+        AnimatedVisibility(
+            visible = !modoNavegacion && llegadaA == null,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = slideInVertically { alto -> -alto / 2 } + fadeIn(),
+            exit = slideOutVertically { alto -> -alto / 2 } + fadeOut(),
+        ) {
+        Column(
             Modifier
-                .align(Alignment.TopCenter)
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .fillMaxWidth(),
@@ -223,14 +241,19 @@ fun PantallaMapa(
                 )
             }
         }
+        }
 
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-            if (modoNavegacion && !siguiendoCamara) {
+            AnimatedVisibility(
+                visible = modoNavegacion && !siguiendoCamara,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+            ) {
                 // Grande a proposito: se toca manejando
                 ExtendedFloatingActionButton(
                     onClick = { siguiendoCamara = true },
                     modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
                         .padding(bottom = 12.dp)
                         .height(64.dp),
                     icon = { Icon(IconosApio.Navegacion, contentDescription = null) },

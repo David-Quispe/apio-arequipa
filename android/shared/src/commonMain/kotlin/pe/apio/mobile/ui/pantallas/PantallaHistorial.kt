@@ -1,5 +1,11 @@
 package pe.apio.mobile.ui.pantallas
 
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import kotlin.math.roundToInt
+import pe.apio.mobile.ui.entradaSuave
+import pe.apio.mobile.ui.numeroAnimado
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -104,9 +110,12 @@ private fun TarjetaResumen(historial: List<Traslado>) {
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().entradaSuave(),
     ) {
-        Column(Modifier.padding(20.dp)) {
+        // degradado suave sobre el primario, para que la tarjeta no sea un bloque plano
+        val primario = MaterialTheme.colorScheme.primary
+        val degradado = Brush.linearGradient(listOf(primario, lerp(primario, Color.White, 0.22f)))
+        Column(Modifier.background(degradado).padding(20.dp)) {
             Text(
                 "Resumen de traslados",
                 style = MaterialTheme.typography.labelLarge,
@@ -114,13 +123,22 @@ private fun TarjetaResumen(historial: List<Traslado>) {
             )
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth()) {
-                DatoResumen("${historial.size}", "traslados", Modifier.weight(1f))
+                // los numeros cuentan hasta su valor al entrar a la pantalla
                 DatoResumen(
-                    if (historial.isEmpty()) "–" else "${minutosCortos(promedioS)} min",
+                    "${numeroAnimado(historial.size.toFloat()).roundToInt()}",
+                    "traslados",
+                    Modifier.weight(1f),
+                )
+                DatoResumen(
+                    if (historial.isEmpty()) "–" else "${minutosCortos(numeroAnimado(promedioS.toFloat()).toDouble())} min",
                     "promedio",
                     Modifier.weight(1f),
                 )
-                DatoResumen(formatearKmCorto(kmTotales), "recorridos", Modifier.weight(1f))
+                DatoResumen(
+                    formatearKmCorto(numeroAnimado(kmTotales.toFloat()).toDouble()),
+                    "recorridos",
+                    Modifier.weight(1f),
+                )
             }
         }
     }
@@ -205,7 +223,7 @@ private fun FilaTraslado(traslado: Traslado) {
 @Composable
 private fun EstadoVacio() {
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 32.dp),
+        Modifier.fillMaxWidth().padding(vertical = 32.dp).entradaSuave(2),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
