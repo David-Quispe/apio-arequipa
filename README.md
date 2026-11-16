@@ -25,20 +25,38 @@ también expondrá la tabla de privilegios de emergencia por segmento vial
 
 ## Corredor piloto
 
-En vez de cubrir toda Arequipa, el proyecto se enfoca en el corredor entre
-la zona de mayor crecimiento poblacional (Cono Norte) y el clúster
-hospitalario del Cercado:
+El área piloto cubre toda la mancha urbana de Arequipa Metropolitana (no la
+ciudad completa administrativamente, que llega hasta zona desértica
+despoblada hacia Yura/La Joya) — cualquier origen dentro de la ciudad puede
+calcular ruta. Los destinos y las vías con privilegio de vía documentado
+siguen siendo el corredor original entre el Cono Norte y el clúster
+hospitalario del Cercado, que es donde se hizo la verificación de campo:
 
-- **Origen:** Cono Norte (Cerro Colorado -incluyendo Peruarbo, Río Seco y
-  Zamácola-, Cayma, Yanahuara)
+- **Origen:** cualquier punto de Arequipa Metropolitana (Cercado, Yanahuara,
+  Cayma, Cerro Colorado -incluyendo Peruarbo, Río Seco y Zamácola-, José
+  Luis Bustamante y Rivero, Paucarpata, Mariano Melgar, Miraflores, Sachaca,
+  Tiabaya, Uchumayo, Characato, Sabandía, Socabaya).
 - **Destinos:** Hospital Honorio Delgado Espinoza (MINSA), Hospital
   Goyeneche (MINSA), Hospital Nacional Carlos Alberto Seguín Escobedo
-  (EsSalud), Clínica Arequipa (privada)
-- **Vías principales:** Av. Ejército, Puente Grau, Av. Bolognesi, Av.
-  Dolores, Av. Daniel Alcides Carrión, Av. Goyeneche/Peral/El Filtro
+  (EsSalud), Clínica Arequipa (privada) — todos en el Cercado.
+- **Vías con privilegio de vía documentado** (rúbrica con verificación de
+  campo, ver memoria del proyecto): Av. Ejército, Puente Grau, Av.
+  Bolognesi, Av. Dolores, Av. Daniel Alcides Carrión, Av.
+  Goyeneche/Peral/El Filtro. Una ruta que no pase por ninguna de estas
+  igual se calcula normal, solo que no muestra chips de privilegio.
+- **Avenidas con tráfico en vivo:** las 8 de arriba más otras 8 avenidas
+  principales sin rúbrica de privilegio (Av. Lambramani, Av. Pizarro, Av.
+  Fernandini, Av. Víctor Andrés Belaúnde, Av. José Abelardo Quiñones, Av.
+  Alfonso Ugarte, Av. Arancota, Av. Alameda de la Cultura), elegidas viendo
+  qué vías cruzan de verdad rutas reales calculadas desde los distritos
+  recién cubiertos (Paucarpata, Socabaya, Sachaca, Tiabaya, Characato). El
+  ETA con tráfico y el panel de tráfico usan este conjunto de 16; los chips
+  de privilegio siguen usando solo las 8 con verificación de campo — son
+  dos listas separadas a propósito (`CASE_AVENIDA` vs.
+  `CASE_AVENIDA_TRAFICO` en `backend/app/services/corridor_overlap.py`).
 
 El área de cobertura real (grafo cargado en GraphHopper/PostGIS) es el
-rectángulo `-71.63,-16.42` a `-71.52,-16.33` — un origen o destino fuera de
+rectángulo `-71.66,-16.47` a `-71.47,-16.33` — un origen o destino fuera de
 ese rectángulo no tiene ruta calculable (ver `CORRIDOR_BBOX` en
 `backend/scripts/load_osm_graph.py`).
 
@@ -65,8 +83,17 @@ como Kotlin Multiplatform real (no solo Kotlin/Android) para poder sumar iOS
 después sin reescribir la lógica: `android/shared/src/commonMain` tiene los
 modelos, el cliente HTTP (Ktor) y el estado de la app; `androidMain` tiene
 solo lo que de verdad depende de la plataforma (el mapa con
-[osmdroid](https://github.com/osmdroid/osmdroid), detrás de un
-`expect fun MapaOSM(...)`).
+[MapLibre Native](https://github.com/maplibre/maplibre-native) y estilos de
+MapTiler, detrás de un `expect fun MapaApio(...)`; con ruta activa y GPS real
+entra en modo navegación, con cámara inclinada que sigue a la ambulancia).
+
+La UI sigue una propuesta de diseño de alta fidelidad pensada para leerse de
+un vistazo dentro del vehículo: paneles flotantes tipo "glass" sobre el mapa
+a pantalla completa, jerarquía tipográfica fuerte en el ETA (tachado chico →
+negrita grande), chips de privilegio con barra de intensidad, y un estado
+(`EstadoPantalla`, sealed interface) por cada situación real — vacío,
+calculando, éxito, error (con o sin botón de reintentar según si el problema
+es de cobertura o del servicio).
 
 **Requiere el backend real corriendo en local** (`./start.ps1`) — no tiene
 modo demo propio, siempre habla con `http://10.0.2.2:8000/api` (el alias del
@@ -108,7 +135,7 @@ cp .env.example .env  # y completar TOMTOM_API_KEY (gratis en developer.tomtom.c
 el repo por su tamaño, ver `routing/config.yml` para dónde deben ir)
 ```bash
 cd routing
-java -Xmx3g -jar graphhopper-web-11.0.jar server config.yml
+java -Xmx4g -jar graphhopper-web-11.0.jar server config.yml
 ```
 
 **4. Frontend**
@@ -195,14 +222,22 @@ todavía (necesitarían mockear GraphHopper/PostGIS).
 - [x] Buscador de dirección, PWA instalable, iconos por tipo de hospital
 - [x] Rúbrica de privilegios: 5 criterios (jerarquía vial, carriles/ancho,
       semáforos por km, separador central, congestión observada) calculados
-      sobre los ~156 segmentos reales del corredor (tabla `privilegios_via` en
+      sobre los ~162 segmentos reales del corredor (tabla `privilegios_via` en
       PostGIS).
 - [x] `custom_model` de GraphHopper ajustado para preferir vías de mayor
       jerarquía y más carriles (2 de los 5 criterios, aplicados a toda la red)
 - [x] Tráfico en tiempo real (TomTom Traffic Flow API): endpoint `/api/traffic`
-      con congestión actual por avenida (cacheada 60s), panel en el mapa, y
-      ETA de `/api/route` ajustado según las avenidas que la ruta realmente
-      cruza (ST_Intersects sobre `privilegios_via`)
+      con congestión actual por 16 avenidas (cacheada 60s), y ETA de
+      `/api/route` ajustado según las que la ruta realmente cruza
+      (`ST_Intersects` sobre `osm_edges`, todo el grafo) — ver
+      [Corredor piloto](#corredor-piloto)
+- [x] Área piloto ampliada de "solo Cono Norte" a toda Arequipa Metropolitana:
+      cualquier origen dentro de la mancha urbana real de la ciudad calcula
+      ruta, no solo el corredor original — ver [Corredor piloto](#corredor-piloto)
+- [x] Panel de tráfico contextual: sin ruta activa muestra las 16 avenidas
+      monitoreadas ("Tráfico en vivo"); con una ruta calculada se filtra a
+      solo las que esa ruta cruza de verdad ("Tráfico de tu ruta"), con
+      scroll interno para no salirse de la pantalla
 - [x] Privilegios de vía conectados al ruteo real: las 8 avenidas del
       corredor son "áreas" nativas del `custom_model` de GraphHopper
       (`backend/scripts/generar_privilegios_graphhopper.py`), con un plus de
@@ -238,3 +273,8 @@ todavía (necesitarían mockear GraphHopper/PostGIS).
       mapa, marcadores, ruteo real, privilegios, tráfico en vivo y
       auto-refresh del ETA contra el mismo backend — ver
       [Cliente Android nativo](#cliente-android-nativo-kotlin-multiplatform)
+- [x] Rediseño visual del cliente Android sobre una propuesta de diseño de
+      alta fidelidad: paneles flotantes "glass", jerarquía de ETA
+      (tachado→negrita), chips de privilegio con barra de intensidad, y un
+      estado por pantalla (vacío/cargando/éxito/error) en vez de banderas
+      sueltas — ver [Cliente Android nativo](#cliente-android-nativo-kotlin-multiplatform)
