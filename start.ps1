@@ -43,7 +43,7 @@ if (Test-Puerto 8989) {
 } else {
     Write-Host "Iniciando GraphHopper..." -ForegroundColor Cyan
     Start-Process -WindowStyle Hidden -WorkingDirectory "$root\routing" -FilePath "java" `
-        -ArgumentList "-Xmx3g", "-jar", "graphhopper-web-11.0.jar", "server", "config.yml" `
+        -ArgumentList "-Xmx4g", "-jar", "graphhopper-web-11.0.jar", "server", "config.yml" `
         -RedirectStandardOutput "$root\routing\gh.log" -RedirectStandardError "$root\routing\gh-err.log"
     Esperar-Puerto 8989 "GraphHopper" | Out-Null
 }
