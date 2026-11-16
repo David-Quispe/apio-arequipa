@@ -38,3 +38,9 @@ routing/data/
 routing/logs/
 routing/gh.log
 routing/gh-err.log
+
+# Config local de Codex (trae API keys; no es parte del proyecto)
+.codex/
+
+# Volcado de la base de datos (se sube como release, no al repo)
+*.dump
