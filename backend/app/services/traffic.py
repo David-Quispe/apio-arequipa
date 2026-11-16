@@ -1,10 +1,12 @@
 """
 Fase 3 - Trafico en tiempo real (TomTom Traffic Flow API).
 
-Consulta la congestion actual en un punto representativo de cada avenida del
-corredor piloto (mismos puntos ya verificados visualmente en la Fase 1, ver
-memoria del proyecto). Cachea el resultado un rato para no gastar la cuota
-gratuita de TomTom (2500 consultas/dia) si el frontend hace polling seguido.
+Consulta la congestion actual en un punto representativo de cada avenida
+monitoreada (las 8 del corredor original, verificadas visualmente en la
+Fase 1, mas las agregadas al ampliar el area piloto a toda Arequipa -- ver
+corridor_overlap.CASE_AVENIDA_TRAFICO). Cachea el resultado un rato para no
+gastar la cuota gratuita de TomTom (2500 consultas/dia) si el frontend hace
+polling seguido.
 """
 
 import asyncio
@@ -18,7 +20,7 @@ TOMTOM_URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute
 CACHE_TTL_S = 60
 
 # Mismos puntos usados y verificados visualmente en la rubrica de privilegios
-# (Fase 1) para cada avenida del corredor.
+# (Fase 1) para cada avenida del corredor original.
 PUNTOS_AVENIDAS = {
     "Av. Ejercito": (-16.3895, -71.5478),
     "Puente Grau": (-16.3928, -71.5390),
@@ -28,6 +30,18 @@ PUNTOS_AVENIDAS = {
     "Av. Goyeneche": (-16.39920, -71.52535),
     "Peral": (-16.39592, -71.53164),
     "El Filtro": (-16.39347, -71.53035),
+    # Agregadas 2026-09-06 al ampliar el area piloto a toda Arequipa: no
+    # tienen rubrica de privilegios (ver corridor_overlap.CASE_AVENIDA_TRAFICO),
+    # solo trafico en vivo. Puntos tomados de donde rutas reales calculadas
+    # desde Paucarpata/Socabaya/Sachaca/Tiabaya/Characato cruzan cada una.
+    "Av. Lambramani": (-16.4138, -71.5202),
+    "Av. Pizarro": (-16.4255, -71.5148),
+    "Av. Fernandini": (-16.4159, -71.5619),
+    "Av. Victor Andres Belaunde": (-16.4005, -71.5500),
+    "Av. Jose Abelardo Quinones": (-16.3985, -71.5446),
+    "Av. Alfonso Ugarte": (-16.4263, -71.5578),
+    "Av. Arancota": (-16.4398, -71.5717),
+    "Av. Alameda de la Cultura": (-16.4252, -71.5231),
 }
 
 _cache: dict = {"timestamp": 0, "data": None}

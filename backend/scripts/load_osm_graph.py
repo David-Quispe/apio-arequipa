@@ -1,7 +1,7 @@
 """
-Descarga el grafo vial (red 'drive') de OpenStreetMap para el corredor piloto
-de Proyecto APIO (Cono Norte -> cluster hospitalario del Cercado de Arequipa)
-y lo carga en PostGIS como dos tablas: osm_nodes y osm_edges.
+Descarga el grafo vial (red 'drive') de OpenStreetMap para el area piloto de
+Proyecto APIO (Arequipa Metropolitana) y lo carga en PostGIS como dos tablas:
+osm_nodes y osm_edges.
 """
 
 import json
@@ -12,12 +12,19 @@ import osmnx as ox
 from app.core.config import settings
 
 # Bounding box (left=west, bottom=south, right=east, top=north) en EPSG:4326.
-# Cubre el Cono Norte real (Cerro Colorado incluyendo Peruarbo, Rio Seco y
-# Zamacola -- no solo Cayma/Yanahuara) hasta el cluster hospitalario del
-# Cercado (destino), incluyendo Puente Grau. Ampliado el 2026-09-03: el bbox
-# original dejaba fuera zonas de expansion real del Cono Norte (ver memoria
-# del proyecto), que es justamente la poblacion que motiva el proyecto.
-CORRIDOR_BBOX = (-71.63, -16.42, -71.52, -16.33)
+# Ampliado el 2026-09-06 de "solo Cono Norte -> cluster hospitalario" a toda
+# la extension urbana real de Arequipa Metropolitana (Cercado, Yanahuara,
+# Cayma, Cerro Colorado, Jose Luis Bustamante y Rivero, Paucarpata, Mariano
+# Melgar, Miraflores, Sachaca, Tiabaya, Uchumayo, Characato, Sabandia,
+# Socabaya), a pedido del usuario -- cualquier origen dentro de la ciudad
+# debe poder calcular ruta, no solo el Cono Norte. Mismo criterio que la
+# ampliacion anterior (ver memoria del proyecto): se cubre la mancha urbana
+# real, no el limite administrativo/provincial (que se mete en desierto
+# despoblado hacia Yura/La Joya, nucleos separados por varios km sin
+# poblacion). Los 4 hospitales destino y las 8 avenidas de la rubrica de
+# privilegios NO cambian con esto -- es una ampliacion de cobertura de
+# origen, no del corredor documentado.
+CORRIDOR_BBOX = (-71.66, -16.47, -71.47, -16.33)
 
 
 def _stringify_list_columns(gdf):
