@@ -6,10 +6,10 @@ import './App.css'
 
 const API_BASE = 'http://localhost:8000/api'
 
-// Bbox del corredor piloto (west, north, east, south para el viewbox de
+// Bbox del area piloto (west, north, east, south para el viewbox de
 // Nominatim) - mismo usado para descargar el grafo vial en GraphHopper y
 // PostGIS (ver CORRIDOR_BBOX en backend/scripts/load_osm_graph.py).
-const CORRIDOR_VIEWBOX = '-71.63,-16.33,-71.52,-16.42'
+const CORRIDOR_VIEWBOX = '-71.66,-16.33,-71.47,-16.47'
 
 const TIPO_COLORES = {
   MINSA: '#2563eb',
@@ -172,6 +172,7 @@ function App() {
               tiempo_s: resultado.time_s,
               tiempo_s_con_trafico: resultado.time_s_con_trafico,
               privilegios_cruzados: resultado.privilegios_cruzados,
+              avenidas_trafico_cruzadas: resultado.avenidas_trafico_cruzadas,
             }
           )
         }
@@ -203,6 +204,7 @@ function App() {
         tiempo_s: resultado.time_s,
         tiempo_s_con_trafico: resultado.time_s_con_trafico,
         privilegios_cruzados: resultado.privilegios_cruzados,
+        avenidas_trafico_cruzadas: resultado.avenidas_trafico_cruzadas,
       })
     } catch (e) {
       setError(e.message)
@@ -239,6 +241,14 @@ function App() {
       setBuscando(false)
     }
   }
+
+  // Sin ruta activa se muestran todas las avenidas monitoreadas como
+  // siempre; con una ruta calculada se filtra a las que ESA ruta cruza de
+  // verdad. avenidas_trafico_cruzadas (mas amplio que privilegios_cruzados,
+  // cubre toda Arequipa) es lo que hace que esto ya no salga vacio para la
+  // mayoria de las rutas fuera del corredor original, ver memoria del proyecto.
+  const avenidasRuta = ruta ? ruta.avenidas_trafico_cruzadas : null
+  const traficoMostrado = avenidasRuta ? trafico.filter((t) => avenidasRuta.includes(t.avenida)) : trafico
 
   return (
     <div id="map-container">
@@ -285,9 +295,12 @@ function App() {
       </div>
 
       <div className="panel-trafico">
-        <strong>Tráfico del corredor</strong>
+        <strong>{avenidasRuta ? 'Tráfico de tu ruta' : 'Tráfico en vivo'}</strong>
+        {avenidasRuta && traficoMostrado.length === 0 && (
+          <p className="panel-ayuda">Esta ruta no pasa por ninguna avenida con datos de tráfico</p>
+        )}
         <ul>
-          {trafico.map((t) => (
+          {traficoMostrado.map((t) => (
             <li key={t.avenida}>
               <span className="dot" style={{ background: NIVEL_COLORES[t.nivel] }} />
               {t.avenida}

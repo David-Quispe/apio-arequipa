@@ -105,6 +105,8 @@ html, body, #root {
   list-style: none;
   margin: 6px 0 0;
   padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
 }
 
 .panel-trafico li {
